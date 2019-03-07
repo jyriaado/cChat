@@ -34,7 +34,7 @@ def client_send(ip, port, message, timeout):
 
 def help():
     print ("Syntax:")
-    print ("",sys.argv[0]," -server")
+    print ("",sys.argv[0]," -server <ip> <port>")
     print ("  Starts a server listener")
     print ("",sys.argv[0]," -client <ip> <port> <message> ")
     print ("  Sends a message to ip:port")
@@ -42,8 +42,8 @@ def help():
 #print ("length:",str(len(sys.argv)))
 #print ("argv:",sys.argv)
 
-if (len(sys.argv)==2 and sys.argv[1] == "-server"):
-    server("127.0.0.1", "5005")
+if (len(sys.argv)==4 and sys.argv[1] == "-server"):
+    server(sys.argv[2], sys.argv[3])
 elif (len(sys.argv)==5 and sys.argv[1] == "-client"):
     client_send(sys.argv[2], sys.argv[3], sys.argv[4],30)
 else:

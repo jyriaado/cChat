@@ -2,10 +2,13 @@
 chat messaging app implementation for Network Protocol Design course
 
 Syntax:
- .\hello.py  -server
+ .\cchat.py  -server <ip> <port>
   Starts a server listener
- .\hello.py  -client <ip> <port> <message>
+ .\cchat.py  -client <ip> <port> <message>
   Sends a message to ip:port
 
+Sample server usage:
+python .\cchat.py -server localhost 5005
+
 Sample client usage:
-python .\hello.py -client 80.235.40.119 5005 hello2
+python .\cchat.py -client localhost 5005 hello
