@@ -2,9 +2,9 @@
 chat messaging app implementation for Network Protocol Design course
 
 Syntax:  
- pyhton cchat.py -server <ip> <port>  
+ pyhton cchat.py -server \<ip\> \<port\>  
   Starts a server listener  
- python cchat.py -client <ip> <port> <message>  
+ python cchat.py -client \<ip\> \<port\> \<message\>  
   Sends a message to ip:port  
   
 Sample server usage:  
