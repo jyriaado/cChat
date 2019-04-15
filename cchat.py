@@ -42,9 +42,5 @@ def help():
 #print ("length:",str(len(sys.argv)))
 #print ("argv:",sys.argv)
 
-if (len(sys.argv)==4 and sys.argv[1] == "-server"):
-    server(sys.argv[2], sys.argv[3])
-elif (len(sys.argv)==5 and sys.argv[1] == "-client"):
-    client_send(sys.argv[2], sys.argv[3], sys.argv[4],30)
 else:
     help()
