@@ -270,7 +270,47 @@ class PacketManager:
 
     def __init__(self,routing_manager):
         self.routing_manager=routing_manager
+        
+class Node(object):
 
+    def __init__(self, node):
+        self.node = node
+        self.visitedNode = False
+        self.list = []
+        self.preNode = None
+        self.distance = sys.maxsize
+        
+        
+class Edge(object):
+    
+    def __init__(self, weight, start, end):
+        self.weight = weight
+        self.start = start
+        self.end = end
+        
+        
+class Path(object):
+    def path(self, nodeList, edgeList, start):
+        start.distance=0
+        for i in range(0, len(nodeList)-1):
+            for x in edgeList:
+                u = x.start
+                v = x.end
+                distance2 = u.distance + x.weight
+                if distance2 < v.distance:
+                    v.distance = distance2
+                    v.preNode = u
+
+    def getpath(self, target):
+        print("Shortest path:", target.distance)
+        n = target
+        count = 0
+        while n is not None:
+            print("%s -> " % n.node)
+            count = count + 1
+            if (count == 2):
+                print("next node to send to:")
+            n = n.preNode
 
 class RoutingManager:
     send_receive=None
