@@ -275,11 +275,11 @@ class Node(object):
 
     def __init__(self, node):
         self.node = node
-        self.visitedNode = False
+        #self.node_id = id(self)
         self.list = []
-        self.preNode = None
+        self.pre_node = None
         self.distance = sys.maxsize
-        
+  
         
 class Edge(object):
     
@@ -287,13 +287,13 @@ class Edge(object):
         self.weight = weight
         self.start = start
         self.end = end
-        
-        
+    
+    
 class Path(object):
-    def path(self, nodeList, edgeList, start):
-        start.distance=0
-        for i in range(0, len(nodeList)-1):
-            for x in edgeList:
+    def path(self, node_list, edge_list, start):
+        start.distance = 0
+        for i in range(0, len(node_list) - 1):
+            for x in edge_list:
                 u = x.start
                 v = x.end
                 distance2 = u.distance + x.weight
@@ -302,22 +302,27 @@ class Path(object):
                     v.preNode = u
 
     def getpath(self, target):
-        print("Shortest path:", target.distance)
+        #print("Shortest path:", target.distance)
         n = target
-        count = 0
+        next_node = []
         while n is not None:
-            print("%s -> " % n.node)
-            count = count + 1
-            if (count == 2):
-                print("next node to send to:")
-            n = n.preNode
+            #print("%s -> " % n.node)
+            next_node.append(n.node)
+            n = n.pre_node
+        forwared_to = next_node[len(next_node) - 2]
 
 class RoutingManager:
+    
     send_receive=None
     packet_manager=None
 
     def __init__(self,send_receive):
+        
         self.send_receive=send_receive
+        self.id = pgp_id
+        self.routingTable = []
+        self.neighbors = []
+        self.routingTable.append({'DESTINATIONID': self.id, 'NEXTHOPID': self.id, 'HOPCOUNT': 0})
 
     def set_packet_manager(self,packet_manager):
         self.packet_manager=packet_manager
@@ -325,6 +330,35 @@ class RoutingManager:
     def add(self,packet):
         #do something with packet
         test=1
+        self.neighbors.append({'DESTINATIONID': nodeid, 'Weight': hops})
+        if nodeid not in [r['DESTINATIONID'] for r in self.routingTable]:
+            self.routingTable.append({'DESTINATIONID': nodeid, 'NEXTHOPID': nodeid, 'HOPCOUNT': 1})
+        else:
+            for my_row in self.routingTable:
+                if my_row['DESTINATIONID'] == nodeid:
+                    my_row['HOPCOUNT'] = 1
+                    my_row['NEXTHOPID'] = nodeid
+                    
+                    
+    def updateRoutingTable(self, packet):
+        
+        routingTableReceived = json.loads(packet.data)
+        for row in routingTableReceived:
+            if row['DESTINATIONID'] not in [r['DESTINATIONID'] for r in self.routingTable]:
+                if row['NEXTHOPID'] != self.id:
+                    self.routingTable.append(
+                        {'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': packet.id, 'HOPCOUNT': row['HOPCOUNT'] + 1})
+            else:
+                for my_row in self.routingTable:
+                    if my_row['DESTINATIONID'] == row['dest']:
+                        if row['HOPCOUNT'] + 1 < my_row['cost']:
+                            my_row['HOPCOUNT'] = row['cost'] + 1
+                            my_row['NEXTHOPID'] = packet.id
+        for row in self.routingTable:
+            if row['DESTINATIONID'] not in [r['DESTINATIONID'] for r in routingTableReceived]:
+                if row['NEXTHOPID'] == packet.id:
+                    self.routingTable.remove(row)
+
 
 class SendAndReceive:
 
