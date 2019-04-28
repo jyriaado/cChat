@@ -267,9 +267,47 @@ class BinaryMessage (PacketCollection):
 
 class PacketManager:
     routing_manager=None
+    session_id=0
+    
+    sessions={destination:session_id}
+    openSessions={session_id:packetList}
+    completedSessions={session_id:packetList}
+   
+    def __init__(self,routing_manager,session_id):
+        self.routing_manager=routing_manager      
+             #Call p=PacketCollection.init_with_packets(packetList) with completedSessions?
+    
+    def add(packet, destination):
+        existingSession = False
+        #1 session per destination?
+        for destination in sessions:
+            if d == destination
+                existingSession = True
 
-    def __init__(self,routing_manager):
-        self.routing_manager=routing_manager
+        if existingSession == True       
+            session_id=sessions.get(destination)
+            packetList = openSessions.get(session_id)
+            packetList.add(packet)
+            openSessions.update(session_id:packetList)
+            #check if last packet or 1packet session? If so, then add to completedSessions
+        else
+            #start new session
+            session_id+=1
+            packetList= list(packet)
+            openSessions.update(session_id:packetList)
+        
+    def send_text (text, nickname)
+        #put_together_packets()
+        session_id+=1
+        
+        
+    def req_routing_update()
+        #put_together_packets()
+        rounting_manager.
+
+
+#If you have a list of packets (in packetmanager for example) you can do p=PacketCollection.init_with_packets([list of packets])
+#and then you can make p.get_collection() to receive object of message (ScreenMessage, etc)
         
 class Node(object):
 
