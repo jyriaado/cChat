@@ -267,17 +267,117 @@ class BinaryMessage (PacketCollection):
 
 class PacketManager:
     routing_manager=None
+    session_id=0
+    
+    sessions={destination:session_id}
+    openSessions={session_id:packetList}
+    completedSessions={session_id:packetList}
+   
+    def __init__(self,routing_manager,session_id):
+        self.routing_manager=routing_manager      
+        #Call p=PacketCollection.init_with_packets(packetList) with completedSessions?
+    
+    def add(packet, destination):
+        existingSession = False
+        #1 session per destination? if not, need to check for tuples.
+        for destination in sessions:
+            if d == destination
+                existingSession = True
 
-    def __init__(self,routing_manager):
-        self.routing_manager=routing_manager
+        if existingSession == True       
+            session_id=sessions.get(destination)
+            packetList = openSessions.get(session_id)
+            packetList.add(packet)
+            openSession={session_id:packetList}
+            openSessions.update(openSession)
+        elif
+            #check if last packet or 1packet session? If so, then add to completedSessions
+        else
+            #start new session
+            session_id+=1
+            session={destination:session_id}
+            sessions.update(session)
+            #start new packetList
+            packetList= list(packet)
+            openSession={session_id:packetList}
+            openSessions.update(opensession)
+        
+    def send_text()
+        text=input('Enter text: ')
+        nickname=input('Enter receiver nickname: ')
+        availableNick=False
+        while availableNick == False
+            try:
+                #check if nickname exists (destination <> nickname connection)
+                #if yes, availableNick = True
+            except:
+                print("This nickname is not available!") #print list of available nicknames?
+        
+        #compose packet - p=packet(self, packet_type, source, destination, session_id, data)
+        #add(packet, destination)
+        
+    def req_routing_update()
+        
+        #compose packet - p=packet(self, packet_type, source, destination, session_id, data)
+        #add(packet, destination)
+        
 
+
+#If you have a list of packets (in packetmanager for example) you can do p=PacketCollection.init_with_packets([list of packets])
+#and then you can make p.get_collection() to receive object of message (ScreenMessage, etc)
+        
+class Node(object):
+
+    def __init__(self, node):
+        self.node = node
+        #self.node_id = id(self)
+        self.list = []
+        self.pre_node = None
+        self.distance = sys.maxsize
+  
+        
+class Edge(object):
+    
+    def __init__(self, weight, start, end):
+        self.weight = weight
+        self.start = start
+        self.end = end
+    
+    
+class Path(object):
+    def path(self, node_list, edge_list, start):
+        start.distance = 0
+        for i in range(0, len(node_list) - 1):
+            for x in edge_list:
+                u = x.start
+                v = x.end
+                distance2 = u.distance + x.weight
+                if distance2 < v.distance:
+                    v.distance = distance2
+                    v.preNode = u
+
+    def getpath(self, target):
+        #print("Shortest path:", target.distance)
+        n = target
+        next_node = []
+        while n is not None:
+            #print("%s -> " % n.node)
+            next_node.append(n.node)
+            n = n.pre_node
+        forwared_to = next_node[len(next_node) - 2]
 
 class RoutingManager:
+    
     send_receive=None
     packet_manager=None
 
     def __init__(self,send_receive):
+        
         self.send_receive=send_receive
+        self.id = pgp_id
+        self.routingTable = []
+        self.neighbors = []
+        self.routingTable.append({'DESTINATIONID': self.id, 'NEXTHOPID': self.id, 'HOPCOUNT': 0})
 
     def set_packet_manager(self,packet_manager):
         self.packet_manager=packet_manager
@@ -285,6 +385,35 @@ class RoutingManager:
     def add(self,packet):
         #do something with packet
         test=1
+        self.neighbors.append({'DESTINATIONID': nodeid, 'Weight': hops})
+        if nodeid not in [r['DESTINATIONID'] for r in self.routingTable]:
+            self.routingTable.append({'DESTINATIONID': nodeid, 'NEXTHOPID': nodeid, 'HOPCOUNT': 1})
+        else:
+            for my_row in self.routingTable:
+                if my_row['DESTINATIONID'] == nodeid:
+                    my_row['HOPCOUNT'] = 1
+                    my_row['NEXTHOPID'] = nodeid
+                    
+                    
+    def updateRoutingTable(self, packet):
+        
+        routingTableReceived = json.loads(packet.data)
+        for row in routingTableReceived:
+            if row['DESTINATIONID'] not in [r['DESTINATIONID'] for r in self.routingTable]:
+                if row['NEXTHOPID'] != self.id:
+                    self.routingTable.append(
+                        {'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': packet.id, 'HOPCOUNT': row['HOPCOUNT'] + 1})
+            else:
+                for my_row in self.routingTable:
+                    if my_row['DESTINATIONID'] == row['dest']:
+                        if row['HOPCOUNT'] + 1 < my_row['cost']:
+                            my_row['HOPCOUNT'] = row['cost'] + 1
+                            my_row['NEXTHOPID'] = packet.id
+        for row in self.routingTable:
+            if row['DESTINATIONID'] not in [r['DESTINATIONID'] for r in routingTableReceived]:
+                if row['NEXTHOPID'] == packet.id:
+                    self.routingTable.remove(row)
+
 
 class SendAndReceive:
 
