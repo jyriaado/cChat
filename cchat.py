@@ -275,11 +275,11 @@ class PacketManager:
    
     def __init__(self,routing_manager,session_id):
         self.routing_manager=routing_manager      
-             #Call p=PacketCollection.init_with_packets(packetList) with completedSessions?
+        #Call p=PacketCollection.init_with_packets(packetList) with completedSessions?
     
     def add(packet, destination):
         existingSession = False
-        #1 session per destination?
+        #1 session per destination? if not, need to check for tuples.
         for destination in sessions:
             if d == destination
                 existingSession = True
@@ -288,22 +288,39 @@ class PacketManager:
             session_id=sessions.get(destination)
             packetList = openSessions.get(session_id)
             packetList.add(packet)
-            openSessions.update(session_id:packetList)
+            openSession={session_id:packetList}
+            openSessions.update(openSession)
+        elif
             #check if last packet or 1packet session? If so, then add to completedSessions
         else
             #start new session
             session_id+=1
+            session={destination:session_id}
+            sessions.update(session)
+            #start new packetList
             packetList= list(packet)
-            openSessions.update(session_id:packetList)
+            openSession={session_id:packetList}
+            openSessions.update(opensession)
         
-    def send_text (text, nickname)
-        #put_together_packets()
-        session_id+=1
+    def send_text()
+        text=input('Enter text: ')
+        nickname=input('Enter receiver nickname: ')
+        availableNick=False
+        while availableNick == False
+            try:
+                #check if nickname exists (destination <> nickname connection)
+                #if yes, availableNick = True
+            except:
+                print("This nickname is not available!") #print list of available nicknames?
         
+        #compose packet - p=packet(self, packet_type, source, destination, session_id, data)
+        #add(packet, destination)
         
     def req_routing_update()
-        #put_together_packets()
-        rounting_manager.
+        
+        #compose packet - p=packet(self, packet_type, source, destination, session_id, data)
+        #add(packet, destination)
+        
 
 
 #If you have a list of packets (in packetmanager for example) you can do p=PacketCollection.init_with_packets([list of packets])
