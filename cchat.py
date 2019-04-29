@@ -340,14 +340,15 @@ class SendAndReceive:
 
 def help():
     print ("Syntax:")
-    print ("",sys.argv[0]," <host> <port> <longid> <nickname>")
+    print ("",sys.argv[0]," <host> <port> <longid> <nickname> [ <neighbour host> <neighbour port> <neighbour longid> ]... ")
     print ("Example")
     print ("",sys.argv[0]," localhost 5005 0101010102020202 jimmy")
 
 print ("length:",str(len(sys.argv)))
 print ("argv:",sys.argv)
 
-if (len(sys.argv)==5):
+#neighbor can be set only on command line
+if (len(sys.argv)>=5):
 
     send_receive=SendAndReceive((sys.argv[1], sys.argv[2]), bytes().fromhex(sys.argv[3]), sys.argv[4])
     routing_manager=RoutingManager(send_receive)
