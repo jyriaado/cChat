@@ -267,65 +267,84 @@ class BinaryMessage (PacketCollection):
 
 class PacketManager:
     routing_manager=None
-    session_id=0
-    
-    sessions={destination:session_id}
-    openSessions={session_id:packetList}
-    completedSessions={session_id:packetList}
+    #destination:session_id
+    sessions={}
+    #session_id:packetList
+    openSessions={}
+    #session_id:packetList
+    #completedSessions={}
    
-    def __init__(self,routing_manager,session_id):
+    def __init__(self,routing_manager):
         self.routing_manager=routing_manager      
         #Call p=PacketCollection.init_with_packets(packetList) with completedSessions?
     
-    def add(packet, destination):
-        existingSession = False
-        #1 session per destination? if not, need to check for tuples.
-        for destination in sessions:
-            if d == destination
-                existingSession = True
+    def add(self, packet, destination):
+         
 
-        if existingSession == True       
-            session_id=sessions.get(destination)
-            packetList = openSessions.get(session_id)
-            packetList.add(packet)
-            openSession={session_id:packetList}
-            openSessions.update(openSession)
-        elif
-            #check if last packet or 1packet session? If so, then add to completedSessions
-        else
+        if packet.session_id in self.openSessions:       
+            packetList = self.openSessions.get(packet.session_id)
+        else:
             #start new session
-            session_id+=1
-            session={destination:session_id}
-            sessions.update(session)
-            #start new packetList
-            packetList= list(packet)
-            openSession={session_id:packetList}
-            openSessions.update(opensession)
+            if packet.destintion in self.sessions:
+                session_id=self.sessions[destination]
+                session_id+=1
+            else:
+                session_id=0
+
+            self.sessions[destination]=session_id
+            #start new packetList)
+            packetList=list()
+            self.openSessions[destination]=list()
+
+        #add packet to the list
+        packetList.add(packet)
+
+        #verify if session is complete
+        is_complete=False
+        try:
+            packet_collection=PacketCollection.init_with_packets(packetList).get_collection()
+            is_complete=True
+        except Exception:
+            #do nothing
+            is_complete=False
+
+        #check the completed packetcollection
+        if is_complete==True:
+            if type(packet_collection)==KeepaliveMessage:
+                test=1
+            elif type(packet_collection)==RouteUpdateMessage:
+                test=1
+            elif type(packet_collection)==RequestFullRouteUpdateMessage:
+                test=1
+            elif type(packet_collection)==SendIdentityMessage:
+                test=1
+            elif type(packet_collection)==ScreenMessage:
+                test=1
+            elif type(packet_collection)==BinaryMessage:
+                test=1
         
-    def send_text()
+    # hello
+    # /nick hello
+    def send_text(self, text):
         text=input('Enter text: ')
         nickname=input('Enter receiver nickname: ')
         availableNick=False
-        while availableNick == False
+        while availableNick == False:
             try:
                 #check if nickname exists (destination <> nickname connection)
                 #if yes, availableNick = True
-            except:
+                test=1
+            except ValueError:
                 print("This nickname is not available!") #print list of available nicknames?
         
         #compose packet - p=packet(self, packet_type, source, destination, session_id, data)
         #add(packet, destination)
         
-    def req_routing_update()
-        
+    def req_routing_update(self):       
         #compose packet - p=packet(self, packet_type, source, destination, session_id, data)
         #add(packet, destination)
-        
-
-
-#If you have a list of packets (in packetmanager for example) you can do p=PacketCollection.init_with_packets([list of packets])
-#and then you can make p.get_collection() to receive object of message (ScreenMessage, etc)
-        
+        test=1
+                
 class Node(object):
 
     def __init__(self, node):
@@ -374,7 +393,7 @@ class RoutingManager:
     def __init__(self,send_receive):
         
         self.send_receive=send_receive
-        self.id = pgp_id
+        self.id = 0 #pgp_id
         self.routingTable = []
         self.neighbors = []
         self.routingTable.append({'DESTINATIONID': self.id, 'NEXTHOPID': self.id, 'HOPCOUNT': 0})
@@ -384,7 +403,8 @@ class RoutingManager:
 
     def add(self,packet):
         #do something with packet
-        test=1
+        nodeid=packet.destomation
+        hops=1
         self.neighbors.append({'DESTINATIONID': nodeid, 'Weight': hops})
         if nodeid not in [r['DESTINATIONID'] for r in self.routingTable]:
             self.routingTable.append({'DESTINATIONID': nodeid, 'NEXTHOPID': nodeid, 'HOPCOUNT': 1})
@@ -441,8 +461,7 @@ class SendAndReceive:
 
     def start(self):
 
-        sock = socket.socket(socket.AF_INET, # Internet 
-            socket.SOCK_DGRAM) # UDP
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind(self.host_port)
         sock.listen(10)
 
@@ -452,20 +471,22 @@ class SendAndReceive:
             time.sleep(.1)
             recv,write,err = select.select(connections,connections,connections)
 
-            for socket in recv:
-                msg = socket.recv(4096).decode("UTF-8")
+            for s in recv:
+                msg = s.recv(4096).decode("UTF-8")
                 print("Recieved message from a socket, message was: "+msg.hex())
                 routing_manager.add(Packet.init_with_data(msg))
 
-            for socket in write:
+            for s in write:
                 while (len(self.send_buffer)>0):
                     (packet, neighbour) = self.send_buffer.pop(0)
-                    socket.sendto(packet.encode(), neighbour)
+                    s.sendto(packet.encode(), neighbour)
 
-            for socket in err:
+            for s in err:
                 print("Error with a socket")
-                socket.close()
-                connections.remove(socket)
+                s.close()
+                connections.remove(s)
+
+
 
 def help():
     print ("Syntax:")
@@ -479,7 +500,7 @@ print ("argv:",sys.argv)
 #neighbor can be set only on command line
 if (len(sys.argv)>=5):
 
-    send_receive=SendAndReceive((sys.argv[1], sys.argv[2]), bytes().fromhex(sys.argv[3]), sys.argv[4])
+    send_receive=SendAndReceive((sys.argv[1], int(sys.argv[2])), bytes().fromhex(sys.argv[3]), sys.argv[4])
     routing_manager=RoutingManager(send_receive)
     packet_manager=PacketManager(routing_manager)
     routing_manager.set_packet_manager(packet_manager)
