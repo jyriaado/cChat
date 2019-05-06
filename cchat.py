@@ -392,21 +392,21 @@ class Path(object):
 
 class RoutingManager:
     
-    send_receive=None
-    packet_manager=None
+    send_receive = None
+    packet_manager = None
 
-    def __init__(self,send_receive):
+    def __init__(self, send_receive):
         
-        self.send_receive=send_receive
+        self.send_receive = send_receive
         self.id = 0 #pgp_id
         self.routingTable = []
         self.neighbors = []
         self.routingTable.append({'DESTINATIONID': self.id, 'NEXTHOPID': self.id, 'HOPCOUNT': 0})
 
-    def set_packet_manager(self,packet_manager):
-        self.packet_manager=packet_manager
+    def set_packet_manager(self, packet_manager):
+        self.packet_manager = packet_manager
 
-    def add(self,packet):
+    def add(self, packet):
         #do something with packet
         #print("parsing:",packet)
         nodeid=packet.destination
