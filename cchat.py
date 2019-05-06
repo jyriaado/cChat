@@ -387,24 +387,24 @@ class Path(object):
 
 class RoutingManager:
     
-    send_receive=None
-    packet_manager=None
+    send_receive = None
+    packet_manager = None
 
-    def __init__(self,send_receive):
+    def __init__(self, send_receive):
         
-        self.send_receive=send_receive
+        self.send_receive = send_receive
         self.id = 0 #pgp_id
         self.routingTable = []
         self.neighbors = []
         self.routingTable.append({'DESTINATIONID': self.id, 'NEXTHOPID': self.id, 'HOPCOUNT': 0})
 
-    def set_packet_manager(self,packet_manager):
-        self.packet_manager=packet_manager
+    def set_packet_manager(self, packet_manager):
+        self.packet_manager = packet_manager
 
-    def add(self,packet):
+    def add(self, packet):
         #do something with packet
-        nodeid=packet.destomation
-        hops=1
+        nodeid = packet.destomation
+        hops = 1
         self.neighbors.append({'DESTINATIONID': nodeid, 'Weight': hops})
         if nodeid not in [r['DESTINATIONID'] for r in self.routingTable]:
             self.routingTable.append({'DESTINATIONID': nodeid, 'NEXTHOPID': nodeid, 'HOPCOUNT': 1})
@@ -425,9 +425,9 @@ class RoutingManager:
                         {'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': packet.id, 'HOPCOUNT': row['HOPCOUNT'] + 1})
             else:
                 for my_row in self.routingTable:
-                    if my_row['DESTINATIONID'] == row['dest']:
-                        if row['HOPCOUNT'] + 1 < my_row['cost']:
-                            my_row['HOPCOUNT'] = row['cost'] + 1
+                    if my_row['DESTINATIONID'] == row['DESTINATIONID']:
+                        if row['HOPCOUNT'] + 1 < my_row['HOPCOUNT']:
+                            my_row['HOPCOUNT'] = row['HOPCOUNT'] + 1
                             my_row['NEXTHOPID'] = packet.id
         for row in self.routingTable:
             if row['DESTINATIONID'] not in [r['DESTINATIONID'] for r in routingTableReceived]:
