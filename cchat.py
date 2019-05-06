@@ -3,6 +3,7 @@ import socket
 import select
 import time
 import json
+import threading
 
 packet_header_length=20
 packet_limit=100
@@ -34,17 +35,19 @@ class Packet:
     @classmethod
     def init_with_data(self, data):
         #parse the data
+        #print("packet length:",len(data))
         if (len(data)>=packet_header_length):
-            first_byte = int.from_bytes(data[0:1])
-            self.packet_version = ((first_byte & 0xC0) >> 6)
-            self.packet_type = ((first_byte & 0x38) >> 3)
-            self.packet_flags = first_byte & 0x07
-            self.session_id = int.from_bytes(data[17:18])
-            self.seq = int.from_bytes(data[18:20])
-            self.source = int.from_bytes(data[1:9])
-            self.destination = int.from_bytes(data[9:17])
-            length = int.from_bytes(data[9:10])
-            self.data = data[20:]
+            first_byte = int.from_bytes(data[0:1], byteorder='big')
+            packet_version = ((first_byte & 0xC0) >> 6)
+            packet_type = ((first_byte & 0x38) >> 3)
+            packet_flags = first_byte & 0x07
+            session_id = int.from_bytes(data[17:18], byteorder='big')
+            seq = int.from_bytes(data[18:20], byteorder='big')
+            source = data[1:9]
+            destination = data[9:17]
+            length = int.from_bytes(data[9:10], byteorder='big')
+            payload = data[20:]
+            return Packet(packet_type,packet_flags, source, destination, session_id, seq, payload)
         else:
             raise Exception("cannot parse packet, as it is too short:",len(data))    
 
@@ -59,7 +62,16 @@ class Packet:
 
         return bytes(b)        
 
-
+    def __str__(self):
+        return "version:"+hex(self.packet_version)+"\n"+\
+            "type:"+hex(self.packet_type)+"\n"+\
+                "flags:"+hex(self.packet_flags)+"\n"\
+                    +"session_id:"+hex(self.session_id)+"\n"\
+                        +"seq:"+hex(self.seq)+"\n"\
+                            +"source:"+print_hex(self.source)+"\n"\
+                                +"destination:"+print_hex(self.destination)+"\n"\
+                                    +"data:"+print_hex(self.data)+"\n"
+        
 class PacketCollection:
 
     session_id=0
@@ -138,6 +150,7 @@ class PacketCollection:
     def split_packets(self, packet_type, source, destination, session_id, data):
         packets=[]
 
+        print("split_packets destination:"+str(destination))
         #check for length of data, split to data segments
         data_segments=[]
         packet_no=1                
@@ -267,42 +280,34 @@ class BinaryMessage (PacketCollection):
 
 class PacketManager:
     routing_manager=None
-    #destination:session_id
+    #destination openSessions
     sessions={}
-    #session_id:packetList
-    openSessions={}
-    #session_id:packetList
-    #completedSessions={}
    
     def __init__(self,routing_manager):
         self.routing_manager=routing_manager      
-        #Call p=PacketCollection.init_with_packets(packetList) with completedSessions?
     
-    def add(self, packet, destination):
-         
+    def add(self, packet):
 
-        if packet.session_id in self.openSessions:       
-            packetList = self.openSessions.get(packet.session_id)
+        #session_id packetlist
+        open_sessions={}
+        if packet.destination in self.sessions:
+            open_sessions=self.sessions[packet.destination]
         else:
-            #start new session
-            if packet.destintion in self.sessions:
-                session_id=self.sessions[destination]
-                session_id+=1
-            else:
-                session_id=0
-
-            self.sessions[destination]=session_id
-            #start new packetList)
-            packetList=list()
-            self.openSessions[destination]=list()
+            self.sessions[packet.destination]=open_sessions
+            
+        packet_list=[]
+        if packet.session_id in open_sessions:       
+            packet_list = open_sessions[packet.session_id]
+        else:
+            open_sessions[packet.session_id]=packet_list
 
         #add packet to the list
-        packetList.add(packet)
+        packet_list.add(packet)
 
         #verify if session is complete
         is_complete=False
         try:
-            packet_collection=PacketCollection.init_with_packets(packetList).get_collection()
+            packet_collection=PacketCollection.init_with_packets(packet_list).get_collection()
             is_complete=True
         except Exception:
             #do nothing
@@ -311,17 +316,17 @@ class PacketManager:
         #check the completed packetcollection
         if is_complete==True:
             if type(packet_collection)==KeepaliveMessage:
-                test=1
+                print("KeepaliveMessage received")
             elif type(packet_collection)==RouteUpdateMessage:
-                test=1
+                print("RouteUpdateMessage received")
             elif type(packet_collection)==RequestFullRouteUpdateMessage:
-                test=1
+                print("RequestFullRouteUpdateMessage received")
             elif type(packet_collection)==SendIdentityMessage:
-                test=1
+                print("SendIdentityMessage received")
             elif type(packet_collection)==ScreenMessage:
-                test=1
+                print("ScreenMessage received")
             elif type(packet_collection)==BinaryMessage:
-                test=1
+                print("BinaryMessage received")
         
     # hello
     # /nick hello
@@ -403,9 +408,10 @@ class RoutingManager:
 
     def add(self,packet):
         #do something with packet
-        nodeid=packet.destomation
+        #print("parsing:",packet)
+        nodeid=packet.destination
         hops=1
-        self.neighbors.append({'DESTINATIONID': nodeid, 'Weight': hops})
+        #self.neighbors.append({'DESTINATIONID': nodeid, 'Weight': hops})
         if nodeid not in [r['DESTINATIONID'] for r in self.routingTable]:
             self.routingTable.append({'DESTINATIONID': nodeid, 'NEXTHOPID': nodeid, 'HOPCOUNT': 1})
         else:
@@ -413,7 +419,13 @@ class RoutingManager:
                 if my_row['DESTINATIONID'] == nodeid:
                     my_row['HOPCOUNT'] = 1
                     my_row['NEXTHOPID'] = nodeid
-                    
+        if packet.destination == self.id:
+            self.packet_manager.add(packet)
+        else:
+            #find next hop for packet.destination
+            #find the host_port for next hop
+            host_port : packet.destination in self.neighbors
+            self.send_receive.send(packet,host_port)
                     
     def updateRoutingTable(self, packet):
         
@@ -425,26 +437,49 @@ class RoutingManager:
                         {'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': packet.id, 'HOPCOUNT': row['HOPCOUNT'] + 1})
             else:
                 for my_row in self.routingTable:
-                    if my_row['DESTINATIONID'] == row['dest']:
-                        if row['HOPCOUNT'] + 1 < my_row['cost']:
-                            my_row['HOPCOUNT'] = row['cost'] + 1
+                    if my_row['DESTINATIONID'] == row['DESTINATIONID']:
+                        if row['HOPCOUNT'] + 1 < my_row['HOPCOUNT']:
+                            my_row['HOPCOUNT'] = row['HOPCOUNT'] + 1
                             my_row['NEXTHOPID'] = packet.id
         for row in self.routingTable:
             if row['DESTINATIONID'] not in [r['DESTINATIONID'] for r in routingTableReceived]:
                 if row['NEXTHOPID'] == packet.id:
                     self.routingTable.remove(row)
 
+    def add_neighbour(self,host_port, longid):
+        self.neighbors.append({'DESTINATIONID': longid, 'Weight': 1, 'HOST_PORT': host_port})
+        self.send_receive.send(RequestFullRouteUpdateMessage(None,longid,0).get_packets(),host_port)
+
+
+class Keyboard(threading.Thread):
+
+    send_receive=None
+
+    def __init__(self,send_receive):
+        threading.Thread.__init__(self)
+        self.send_receive=send_receive
+
+    def run(self):
+        while True:
+            kbd_input = input("> ")
+            if (kbd_input == "/exit"):
+                break
+            if (kbd_input != ""):
+                self.send_receive.keyboard(kbd_input)
+        self.send_receive.exit()
 
 class SendAndReceive:
 
     host_port=("localhost", 5000)
-    longId=bytes().fromhex("0101010102020202")
+    long_id=bytes().fromhex("0101010102020202")
     nickname="joe"
     send_buffer=[]
+    kbd_buffer=[]
+    do_exit=False
 
-    def __init__(self, host_port, longId, nickname):
+    def __init__(self, host_port, long_id, nickname):
         self.host_port=host_port
-        self.longId=longId
+        self.long_id=long_id
         self.nickname=nickname
 
     def set_routing_manager(self,routing_manager):
@@ -452,40 +487,55 @@ class SendAndReceive:
 
     #packet is of type Packet
     #neighbour is tuple (host port)
-    def send (self,packet, neighbour):
+    def send (self, packet, neighbour):
         if (type(packet)==list):
             for single in packet:
                 self.send_buffer.append((single, neighbour))
         else:
             self.send_buffer.append((packet, neighbour))
 
+    def keyboard(self, kbd_input):
+        self.kbd_buffer.append(kbd_input)
+
+    def exit(self):
+        self.do_exit=True
+
     def start(self):
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind(self.host_port)
-        sock.listen(10)
+        #sock.listen(10)
 
-        connections = [sock]
-
-        while True:
+        while not self.do_exit:
             time.sleep(.1)
+            #check for keyboard input
+            while (len(self.kbd_buffer)>0):
+                kbd_input = self.kbd_buffer.pop(0)
+                #print("Keyboard input:",kbd_input)
+
+            connections = [sock]
+
             recv,write,err = select.select(connections,connections,connections)
 
             for s in recv:
-                msg = s.recv(4096).decode("UTF-8")
-                print("Recieved message from a socket, message was: "+msg.hex())
-                routing_manager.add(Packet.init_with_data(msg))
+                msg = s.recv(4096)
+                #print("Recieved data:",print_hex(msg))
+                packet = Packet.init_with_data(msg)
+                print("Recieved packet:",packet)
+                routing_manager.add(packet)
 
             for s in write:
                 while (len(self.send_buffer)>0):
                     (packet, neighbour) = self.send_buffer.pop(0)
+                    if (packet.source==None):
+                        packet.source=self.long_id
+                    print("Sending packet:",packet,"to",neighbour)
                     s.sendto(packet.encode(), neighbour)
 
             for s in err:
                 print("Error with a socket")
                 s.close()
                 connections.remove(s)
-
 
 
 def help():
@@ -497,6 +547,14 @@ def help():
 print ("length:",str(len(sys.argv)))
 print ("argv:",sys.argv)
 
+def print_hex(data_bytes):
+    
+    msg=""
+    if (type(data_bytes)==bytes and len(data_bytes)>0):
+        msg=''.join(['\\x%02x' % b for b in data_bytes])
+
+    return msg 
+
 #neighbor can be set only on command line
 if (len(sys.argv)>=5):
 
@@ -504,8 +562,15 @@ if (len(sys.argv)>=5):
     routing_manager=RoutingManager(send_receive)
     packet_manager=PacketManager(routing_manager)
     routing_manager.set_packet_manager(packet_manager)
+    routing_manager.id=bytes().fromhex(sys.argv[3])
     send_receive.set_routing_manager(routing_manager)
+
+    if (len(sys.argv)==8):
+        routing_manager.add_neighbour((sys.argv[5], int(sys.argv[6])),bytes().fromhex(sys.argv[7]))
+
+    Keyboard(send_receive).start()
     send_receive.start()
+
 
 else:
     help()
