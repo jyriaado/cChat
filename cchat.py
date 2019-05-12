@@ -415,10 +415,10 @@ class RoutingManager:
     send_receive = None
     packet_manager = None
 
-    def __init__(self, send_receive):
+    def __init__(self, send_receive, longid):
         
         self.send_receive = send_receive
-        self.id = 0 #pgp_id
+        self.id = longid #pgp_id
         self.routingTable = []
         self.neighbors = []
         self.routingTable.append({'DESTINATIONID': self.id, 'NEXTHOPID': self.id, 'HOPCOUNT': 0})
@@ -591,10 +591,9 @@ def print_hex(data_bytes):
 if (len(sys.argv)>=5):
 
     send_receive=SendAndReceive((sys.argv[1], int(sys.argv[2])), bytes().fromhex(sys.argv[3]), sys.argv[4])
-    routing_manager=RoutingManager(send_receive)
+    routing_manager=RoutingManager(send_receive, bytes().fromhex(sys.argv[3]))
     packet_manager=PacketManager(routing_manager)
     routing_manager.set_packet_manager(packet_manager)
-    routing_manager.id=bytes().fromhex(sys.argv[3])
     send_receive.set_routing_manager(routing_manager)
     send_receive.set_packet_manager(packet_manager)
 
