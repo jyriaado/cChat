@@ -102,11 +102,7 @@ class PacketCollection:
         first_packet=self.find_packet_with_flags(self,0x01,packets)
         last_packet=self.find_packet_with_flags(self,0x02,packets)
         if (first_single!=None):
-            self.session_id=first_single.session_id
-            self.packet_type=first_single.packet_type
-            self.source=first_single.source
-            self.destination=first_single.destination
-            self.data=first_single.data
+            return PacketCollection(first_single.packet_type, first_single.source, first_single.destination, first_single.session_id, first_single.data)
         elif (first_packet!=None and last_packet!=None):
             #find if middle packets are there
             next_packet=first_packet
@@ -114,26 +110,26 @@ class PacketCollection:
             cur_seq=next_packet.seq
             packetdata=bytearray()
             while (cur_seq<total_seq and next_packet!=None):
-                packetdata.append(next_packet.data)
-                next_packet=self.find_next_packet(self,cur_seq,packets)
+                #print("cur_seq:",cur_seq)
+                #print("total_seq:",total_seq)
                 cur_seq=next_packet.seq
+                packetdata.extend(next_packet.data)
+                next_packet=self.find_next_packet(self,cur_seq,packets)
+
             if (cur_seq==total_seq):
                 #we have all the packets!
-                self.session_id=first_packet.session_id
-                self.packet_type=first_packet.packet_type
-                self.source=first_packet.source
-                self.destination=first_packet.destination
-                self.data=bytes(packetdata)
+                return PacketCollection(first_packet.packet_type, first_packet.source, first_packet.destination, first_packet.session_id, bytes(packetdata))
             else: 
                 raise Exception("not all packets are available!")
         else:
             raise Exception("not all packets are available!")
+        
 
     def find_next_packet(self, seq, packets):
         #find packet with certain flags
         returnValue=None
         for packet in packets:
-            if (packet.packet_flags==0x00 and len(packet.data)+seq==packet.seq):
+            if ((packet.packet_flags==0x00 or packet.packet_flags==0x02) and len(packet.data)+seq==packet.seq):
                 returnValue=packet
                 break
         return returnValue
@@ -281,7 +277,9 @@ class BinaryMessage (PacketCollection):
 class PacketManager:
     routing_manager=None
     #destination openSessions
-    sessions={}
+    receive_sessions={}
+    #destination session_id
+    send_sessions={}
    
     def __init__(self,routing_manager):
         self.routing_manager=routing_manager      
@@ -290,10 +288,10 @@ class PacketManager:
 
         #session_id packetlist
         open_sessions={}
-        if packet.destination in self.sessions:
-            open_sessions=self.sessions[packet.destination]
+        if packet.destination in self.receive_sessions:
+            open_sessions=self.receive_sessions[packet.destination]
         else:
-            self.sessions[packet.destination]=open_sessions
+            self.receive_sessions[packet.destination]=open_sessions
             
         packet_list=[]
         if packet.session_id in open_sessions:       
@@ -302,19 +300,23 @@ class PacketManager:
             open_sessions[packet.session_id]=packet_list
 
         #add packet to the list
-        packet_list.add(packet)
+        packet_list.append(packet)
 
         #verify if session is complete
         is_complete=False
+        packet_collection=None
         try:
             packet_collection=PacketCollection.init_with_packets(packet_list).get_collection()
             is_complete=True
-        except Exception:
-            #do nothing
+        except Exception as error:
+            print(error)
             is_complete=False
+            if (str(error)!="not all packets are available!"):
+                raise error
 
         #check the completed packetcollection
         if is_complete==True:
+            #print("Session complete")
             if type(packet_collection)==KeepaliveMessage:
                 print("KeepaliveMessage received")
             elif type(packet_collection)==RouteUpdateMessage:
@@ -324,31 +326,49 @@ class PacketManager:
             elif type(packet_collection)==SendIdentityMessage:
                 print("SendIdentityMessage received")
             elif type(packet_collection)==ScreenMessage:
-                print("ScreenMessage received")
+                print("ScreenMessage received:",packet_collection.message)
             elif type(packet_collection)==BinaryMessage:
                 print("BinaryMessage received")
-        
+        else:
+            print("Session not complete")
+
+    def get_send_session_id(self, destination):
+        session_id=None
+        if destination in self.send_sessions:
+            session_id=self.send_sessions[destination]+1
+        else:
+            session_id=0
+        self.send_sessions[destination] = session_id
+        return session_id
+
     # hello
     # /nick hello
     def send_text(self, text):
-        text=input('Enter text: ')
-        nickname=input('Enter receiver nickname: ')
+        #text=input('Enter text: ')
+        #nickname=input('Enter receiver nickname: ')
         availableNick=False
-        while availableNick == False:
+        if availableNick == True:
             try:
                 #check if nickname exists (destination <> nickname connection)
                 #if yes, availableNick = True
                 test=1
             except ValueError:
                 print("This nickname is not available!") #print list of available nicknames?
+        else:
+            #send text to all destinations
+            for destination in self.routing_manager.get_all_destinations():
+                #compose packet
+                m=ScreenMessage(None, destination, self.get_send_session_id(destination), text)
+                #send
+                routing_manager.send(m.get_packets(), destination)
+
         
-        #compose packet - p=packet(self, packet_type, source, destination, session_id, data)
-        #add(packet, destination)
-        
-    def req_routing_update(self):       
-        #compose packet - p=packet(self, packet_type, source, destination, session_id, data)
-        #add(packet, destination)
-        test=1
+    def request_routing_update(self, destination):       
+        self.routing_manager.send(\
+            RequestFullRouteUpdateMessage(\
+                None,\
+                destination,\
+                self.get_send_session_id(destination)).get_packets(),destination)
                 
 class Node(object):
 
@@ -448,8 +468,16 @@ class RoutingManager:
 
     def add_neighbour(self,host_port, longid):
         self.neighbors.append({'DESTINATIONID': longid, 'Weight': 1, 'HOST_PORT': host_port})
-        self.send_receive.send(RequestFullRouteUpdateMessage(None,longid,0).get_packets(),host_port)
+        self.packet_manager.request_routing_update(longid)  
 
+    def get_all_destinations(self):
+        return [n['DESTINATIONID'] for n in self.neighbors]
+
+    def get_neighbour_for_destination(self, destination):
+        return [n['HOST_PORT'] for n in self.neighbors if n['DESTINATIONID']==destination][0]
+
+    def send(self, packet, destination):
+        self.send_receive.send(packet,self.get_neighbour_for_destination(destination))
 
 class Keyboard(threading.Thread):
 
@@ -485,6 +513,9 @@ class SendAndReceive:
     def set_routing_manager(self,routing_manager):
         self.routing_manager=routing_manager
 
+    def set_packet_manager(self,packet_manager):
+        self.packet_manager=packet_manager        
+
     #packet is of type Packet
     #neighbour is tuple (host port)
     def send (self, packet, neighbour):
@@ -511,6 +542,7 @@ class SendAndReceive:
             #check for keyboard input
             while (len(self.kbd_buffer)>0):
                 kbd_input = self.kbd_buffer.pop(0)
+                self.packet_manager.send_text(kbd_input)
                 #print("Keyboard input:",kbd_input)
 
             connections = [sock]
@@ -564,6 +596,7 @@ if (len(sys.argv)>=5):
     routing_manager.set_packet_manager(packet_manager)
     routing_manager.id=bytes().fromhex(sys.argv[3])
     send_receive.set_routing_manager(routing_manager)
+    send_receive.set_packet_manager(packet_manager)
 
     if (len(sys.argv)==8):
         routing_manager.add_neighbour((sys.argv[5], int(sys.argv[6])),bytes().fromhex(sys.argv[7]))
