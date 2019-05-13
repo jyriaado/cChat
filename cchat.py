@@ -458,13 +458,14 @@ class RoutingManager:
             p = Path()
             p.path(listofNodes, listofEdges, listofNodes[0])
             for i in listofNodes:
-                if  i.node == nodeid:
+                if i.node == nodeid:
                     targetNode= i
             nextHopNodeId=p.getpath(targetNode)
+            port = get_neighbour_for_destination(nextHopNodeId)
             #find next hop for packet.destination
             #find the host_port for next hop
             host_port : packet.destination in self.neighbors
-            self.send_receive.send(packet,host_port)
+            self.send_receive.send(packet, port)
                     
     def updateRoutingTable(self, packet):
         
