@@ -401,14 +401,13 @@ class Path(object):
                     v.preNode = u
 
     def getpath(self, target):
-        #print("Shortest path:", target.distance)
         n = target
         next_node = []
         while n is not None:
-            #print("%s -> " % n.node)
             next_node.append(n.node)
             n = n.pre_node
         forwared_to = next_node[len(next_node) - 2]
+        return forward_to
 
 class RoutingManager:
     
@@ -442,6 +441,26 @@ class RoutingManager:
         if packet.destination == self.id:
             self.packet_manager.add(packet)
         else:
+            destinationlist = [n['DESTINATIONID'] for n in self.routingTable]
+            nextlist = [n['NEXTHOPID'] for n in self.routingTable]
+            nodes = list(dict.fromkeys(destinationlist + nextlist))
+            for i in nodes:
+                x = Node(i)
+                listofNodes.append(x)
+            listofEdges = []
+            for row in self.routingTable:
+                for i in listofNodes:
+                    if row['DESTINATIONID'] == i.node:
+                        for j in listofNodes:
+                            if row['NEXTHOPID'] == j.node:
+                                y = Edge(row['HOPCOUNT'], i , j )
+                                listofEdges.append(y)
+            p = Path()
+            p.path(listofNodes, listofEdges, listofNodes[0])
+            for i in listofNodes:
+                if  i.node == nodeid:
+                    targetNode= i
+            nextHopNodeId=p.getpath(targetNode)
             #find next hop for packet.destination
             #find the host_port for next hop
             host_port : packet.destination in self.neighbors
