@@ -346,8 +346,14 @@ class PacketManager:
     def send_text(self, text):
         #text=input('Enter text: ')
         #nickname=input('Enter receiver nickname: ')
-        availableNick=False
-        if availableNick == True:
+        
+        if text[0] == "/":
+            #check if nick available, (example: /bob Hey bob!)
+            #separator is first space
+            slashnick=text.split(" ", 1)
+            nick=slashnick[0][1:]
+            availableNick=False
+            if availableNick == True
             try:
                 #check if nickname exists (destination <> nickname connection)
                 #if yes, availableNick = True
