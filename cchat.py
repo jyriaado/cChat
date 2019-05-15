@@ -1,3 +1,15 @@
+"""
+gitlab : https://gitlab.cs.ttu.ee/taroja/itc8061
+
+keepalive server :
+193.40.103.97 -- urr.k-space.ee
+port: 31337
+GPG: 80078218B43B0E90
+
+Send keepalive to the server with this ID as DSTID, it will respond ACK.
+
+"""
+
 import sys
 import socket
 import select
@@ -361,16 +373,22 @@ class PacketManager:
     def send_text(self, text):
         #text=input('Enter text: ')
         #nickname=input('Enter receiver nickname: ')
-        availableNick=False
-        if availableNick == True:
-            try:
-                #check if nickname exists (destination <> nickname connection)
-                #if yes, availableNick = True
-                test=1
-            except ValueError:
-                print("This nickname is not available!") #print list of available nicknames?
+        
+        if text[0] == "/":
+            #check if nick available, (example: /bob Hey bob!)
+            #separator is first space
+            slashnick=text.split(" ", 1)
+            nick=slashnick[0][1:]
+            availableNick=False
+            if availableNick == True:
+                try:
+                    #check if nickname exists (destination <> nickname connection)
+                    #if yes, availableNick = True
+                    test=1
+                except ValueError:
+                    print("This nickname is not available!") #print list of available nicknames?
         else:
-            #send text to all destinations
+            #send text to all destinations///group message?
             for destination in self.routing_manager.get_all_destinations():
                 #compose packet
                 m=ScreenMessage(None, destination, self.get_send_session_id(destination), text)
@@ -439,7 +457,7 @@ class RoutingManager:
         self.send_receive = send_receive
         self.id = longid #pgp_id
         self.routingTable = []
-        self.neighbors = []
+        self.neighbors = [] #{'DESTINATIONID': id, 'Weight': cost , 'HOST_PORT': host_port}
         self.routingTable.append({'DESTINATIONID': self.id, 'NEXTHOPID': self.id, 'HOPCOUNT': 0})
 
     def set_packet_manager(self, packet_manager):
@@ -448,8 +466,8 @@ class RoutingManager:
     def add(self, packet):
         #do something with packet
         #print("parsing:",packet)
-        nodeid=packet.destination
-        hops=1
+        nodeid = packet.destination
+        hops = 1
         #self.neighbors.append({'DESTINATIONID': nodeid, 'Weight': hops})
         if nodeid not in [r['DESTINATIONID'] for r in self.routingTable]:
             self.routingTable.append({'DESTINATIONID': nodeid, 'NEXTHOPID': nodeid, 'HOPCOUNT': 1})
@@ -524,9 +542,24 @@ class RoutingManager:
     def get_neighbour_for_destination(self, destination):
         return [n['HOST_PORT'] for n in self.neighbors if n['DESTINATIONID']==destination][0]
 
+    def get__neighbour_destinations(self):
+        destinations=[]
+        for row in self.neighbors:
+            destinations.append(row['DESTINATIONID'])
+        return destinations
+
     def send(self, packet, destination):
         print("sending packet:"+str(packet)+" to destination:"+print_hex(destination))
         self.send_receive.send(packet,self.get_neighbour_for_destination(destination))
+
+    def remove_neighbour(self,nodeid):
+        for row in self.neighbors:
+            if row['DESTINATIONID'] == nodeid:
+                self.neighbors.remove(row)
+        for row in self.routingTable:
+            if (row['DESTINATIONID'] == nodeid and row['NEXTHOPID'] == self.id) \
+                    or (row['DESTINATIONID'] == self.id and row['NEXTHOPID'] == nodeid):
+                self.routingTable.remove(row)
 
 class Keyboard(threading.Thread):
 
