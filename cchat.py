@@ -8,6 +8,8 @@ GPG: 80078218B43B0E90
 
 Send keepalive to the server with this ID as DSTID, it will respond ACK.
 
+
+
 """
 
 import sys
@@ -531,6 +533,8 @@ class RoutingManager:
             if (row['DESTINATIONID'] == nodeid and row['NEXTHOPID'] == self.id) \
                     or (row['DESTINATIONID'] == self.id and row['NEXTHOPID'] == nodeid):
                 self.routingTable.remove(row)
+        
+
 
 class Keyboard(threading.Thread):
 
