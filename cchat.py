@@ -290,6 +290,7 @@ class BinaryMessage (PacketCollection):
 
 class PacketManager:
     keepalive_interval=10
+    keepalive_stop=False
     routing_manager=None
     #destination openSessions
     receive_sessions={}
@@ -301,6 +302,7 @@ class PacketManager:
         #start keepalive thread
         thread = threading.Thread(target=self.thread_function_get_keepalive)   
         thread.start()
+        #thread.join()
     
     def add(self, packet):
         #session_id packetlist
@@ -404,9 +406,12 @@ class PacketManager:
                 self.get_send_session_id(destination)).get_packets(),destination)
 
     def thread_function_get_keepalive(self):
-        list_destinations = self.routing_manager.get_neighbour_destinations()
-        for destination in list_destinations:
-            self.routing_manager.send(KeepaliveMessage(None, destination, self.get_send_session_id(destination)))
+        while not self.keepalive_stop:
+            list_destinations = self.routing_manager.get_neighbour_destinations()
+            print("thread_function_get_keepalive destinations:",list_destinations)
+            for destination in list_destinations:
+                self.routing_manager.send(KeepaliveMessage(None, destination, self.get_send_session_id(destination)).get_packets(),destination)
+            time.sleep(self.keepalive_interval) 
 
 class Node(object):
 
@@ -542,7 +547,7 @@ class RoutingManager:
     def get_neighbour_for_destination(self, destination):
         return [n['HOST_PORT'] for n in self.neighbors if n['DESTINATIONID']==destination][0]
 
-    def get__neighbour_destinations(self):
+    def get_neighbour_destinations(self):
         destinations=[]
         for row in self.neighbors:
             destinations.append(row['DESTINATIONID'])
@@ -612,6 +617,7 @@ class SendAndReceive:
 
     def exit(self):
         self.do_exit=True
+        packet_manager.keepalive_stop=True
 
     def start(self):
 
@@ -623,6 +629,7 @@ class SendAndReceive:
             time.sleep(.1)
             #check for keyboard input
             while (len(self.kbd_buffer)>0):
+
                 kbd_input = self.kbd_buffer.pop(0)
                 self.packet_manager.send_text(kbd_input)
                 #print("Keyboard input:",kbd_input)
