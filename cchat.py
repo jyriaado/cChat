@@ -489,6 +489,7 @@ class RoutingManager:
             destinationlist = [n['DESTINATIONID'] for n in self.routingTable]
             nextlist = [n['NEXTHOPID'] for n in self.routingTable]
             nodes = list(dict.fromkeys(destinationlist + nextlist))
+            listofNodes = []
             for i in nodes:
                 x = Node(i)
                 listofNodes.append(x)
