@@ -60,7 +60,10 @@ class Packet:
         b.extend(self.seq.to_bytes(2, byteorder='big'))
         b.extend(self.data)
 
-        return bytes(b)        
+        return bytes(b) 
+
+    def get_ack_packet(self):
+        return Packet(self.packet_type, 0x04, self.source, self.destination, self.session_id, self.seq, bytes())       
 
     def __str__(self):
         return "version:"+hex(self.packet_version)+"\n"+\
@@ -194,7 +197,6 @@ class PacketCollection:
         if (self.packet_type==0x07):
             return BinaryMessage(self.source, self.destination, self.session_id, self.data)
 
-
 class KeepaliveMessage (PacketCollection):
 
     def __init__(self, source, destination, session_id):
@@ -217,8 +219,8 @@ class RouteUpdateMessage (PacketCollection):
             self.routes=route_data
             routedata=bytearray()
             for route in self.routes:
-                routedata.append(route[0])
-                routedata.append(route[1].to_bytes(2, byteorder='big'))
+                routedata.extend(route[0])
+                routedata.extend(route[1].to_bytes(2, byteorder='big'))
             super().__init__((0x03 if isFull else 0x01),source,destination,session_id,bytes(routedata))
 
         else:
@@ -275,17 +277,20 @@ class BinaryMessage (PacketCollection):
 
 
 class PacketManager:
+    keepalive_interval=10
     routing_manager=None
     #destination openSessions
     receive_sessions={}
     #destination session_id
     send_sessions={}
-   
+
     def __init__(self,routing_manager):
-        self.routing_manager=routing_manager      
+        self.routing_manager=routing_manager 
+        #start keepalive thread
+        thread = threading.Thread(target=self.thread_function_get_keepalive)   
+        thread.start()
     
     def add(self, packet):
-
         #session_id packetlist
         open_sessions={}
         if packet.destination in self.receive_sessions:
@@ -319,10 +324,18 @@ class PacketManager:
             #print("Session complete")
             if type(packet_collection)==KeepaliveMessage:
                 print("KeepaliveMessage received")
+                #self.routing_manager.send(KeepaliveMessage(None,\
+                #    packet_collection.source,\
+                #    self.get_send_session_id(packet_collection.source)))
             elif type(packet_collection)==RouteUpdateMessage:
                 print("RouteUpdateMessage received")
             elif type(packet_collection)==RequestFullRouteUpdateMessage:
-                print("RequestFullRouteUpdateMessage received")
+                print("RequestFullRouteUpdateMessage received")             
+                #dest hop
+                self.routing_manager.send(RouteUpdateMessage(True, None,\
+                    packet_collection.source,\
+                    self.get_send_session_id(packet_collection.source),\
+                    routing_manager.get_routing_table()).get_packets(),packet_collection.source)
             elif type(packet_collection)==SendIdentityMessage:
                 print("SendIdentityMessage received")
             elif type(packet_collection)==ScreenMessage:
@@ -336,6 +349,8 @@ class PacketManager:
         session_id=None
         if destination in self.send_sessions:
             session_id=self.send_sessions[destination]+1
+            if session_id==256:
+                session_id=0
         else:
             session_id=0
         self.send_sessions[destination] = session_id
@@ -369,7 +384,12 @@ class PacketManager:
                 None,\
                 destination,\
                 self.get_send_session_id(destination)).get_packets(),destination)
-                
+
+    def thread_function_get_keepalive(self):
+        list_destinations = self.routing_manager.get_neighbour_destinations()
+        for destination in list_destinations:
+            self.routing_manager.send(KeepaliveMessage(None, destination, self.get_send_session_id(destination)))
+
 class Node(object):
 
     def __init__(self, node):
@@ -486,9 +506,17 @@ class RoutingManager:
                 if row['NEXTHOPID'] == packet.id:
                     self.routingTable.remove(row)
 
+    def get_routing_table(self):
+        return_table=list()
+        for n in self.routingTable:
+            destination=n['DESTINATIONID']
+            hopcount=n['HOPCOUNT']
+            return_table.append((destination,hopcount))
+        return return_table
+
     def add_neighbour(self,host_port, longid):
         self.neighbors.append({'DESTINATIONID': longid, 'Weight': 1, 'HOST_PORT': host_port})
-        self.packet_manager.request_routing_update(longid)  
+        self.packet_manager.request_routing_update(longid) 
 
     def get_all_destinations(self):
         return [n['DESTINATIONID'] for n in self.neighbors]
@@ -497,6 +525,7 @@ class RoutingManager:
         return [n['HOST_PORT'] for n in self.neighbors if n['DESTINATIONID']==destination][0]
 
     def send(self, packet, destination):
+        print("sending packet:"+str(packet)+" to destination:"+print_hex(destination))
         self.send_receive.send(packet,self.get_neighbour_for_destination(destination))
 
 class Keyboard(threading.Thread):
@@ -570,11 +599,17 @@ class SendAndReceive:
             recv,write,err = select.select(connections,connections,connections)
 
             for s in recv:
-                msg = s.recv(4096)
-                #print("Recieved data:",print_hex(msg))
-                packet = Packet.init_with_data(msg)
-                print("Recieved packet:",packet)
-                routing_manager.add(packet)
+                try:
+                    msg = s.recv(4096)
+                    #print("Recieved data:",print_hex(msg))
+                    packet = Packet.init_with_data(msg)
+                    print("Recieved packet:",packet)
+                    #ack packet
+                    self.routing_manager.send(packet.get_ack_packet(),packet.source)
+                    #add to routing manager for processing
+                    routing_manager.add(packet)
+                except Exception as error:
+                    print("Error recv:",error)
 
             for s in write:
                 while (len(self.send_buffer)>0):
@@ -582,7 +617,11 @@ class SendAndReceive:
                     if (packet.source==None):
                         packet.source=self.long_id
                     print("Sending packet:",packet,"to",neighbour)
-                    s.sendto(packet.encode(), neighbour)
+                    try:
+                        sent = s.sendto(packet.encode(), neighbour)
+                        print("Sent bytes:",sent,"to",neighbour)
+                    except Exception as error:
+                        print("Error send:",error)
 
             for s in err:
                 print("Error with a socket")
