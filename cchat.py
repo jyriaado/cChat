@@ -1,3 +1,15 @@
+"""
+gitlab : https://gitlab.cs.ttu.ee/taroja/itc8061
+
+keepalive server :
+193.40.103.97 -- urr.k-space.ee
+port: 31337
+GPG: 80078218B43B0E90
+
+Send keepalive to the server with this ID as DSTID, it will respond ACK.
+
+"""
+
 import sys
 import socket
 import select
@@ -353,15 +365,15 @@ class PacketManager:
             slashnick=text.split(" ", 1)
             nick=slashnick[0][1:]
             availableNick=False
-            if availableNick == True
-            try:
-                #check if nickname exists (destination <> nickname connection)
-                #if yes, availableNick = True
-                test=1
-            except ValueError:
-                print("This nickname is not available!") #print list of available nicknames?
+            if availableNick == True:
+                try:
+                    #check if nickname exists (destination <> nickname connection)
+                    #if yes, availableNick = True
+                    test=1
+                except ValueError:
+                    print("This nickname is not available!") #print list of available nicknames?
         else:
-            #send text to all destinations
+            #send text to all destinations///group message?
             for destination in self.routing_manager.get_all_destinations():
                 #compose packet
                 m=ScreenMessage(None, destination, self.get_send_session_id(destination), text)
