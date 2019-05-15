@@ -471,14 +471,14 @@ class RoutingManager:
                     if row['DESTINATIONID'] == i.node:
                         for j in listofNodes:
                             if row['NEXTHOPID'] == j.node:
-                                y = Edge(row['HOPCOUNT'], i , j )
+                                y = Edge(row['HOPCOUNT'], i, j)
                                 listofEdges.append(y)
             p = Path()
             p.path(listofNodes, listofEdges, listofNodes[0])
             for i in listofNodes:
                 if i.node == nodeid:
-                    targetNode= i
-            nextHopNodeId=p.getpath(targetNode)
+                    targetNode = i
+            nextHopNodeId = p.getpath(targetNode)
             port = get_neighbour_for_destination(nextHopNodeId)
             #find next hop for packet.destination
             #find the host_port for next hop
@@ -512,10 +512,10 @@ class RoutingManager:
         return [n['DESTINATIONID'] for n in self.neighbors]
 
     def get_neighbour_for_destination(self, destination):
-        return [n['HOST_PORT'] for n in self.neighbors if n['DESTINATIONID']==destination][0]
+        return [n['HOST_PORT'] for n in self.neighbors if n['DESTINATIONID'] == destination][0]
 
     def get__neighbour_destinations(self):
-        destinations=[]
+        destinations = []
         for row in self.neighbors:
             destinations.append(row['DESTINATIONID'])
         return destinations
