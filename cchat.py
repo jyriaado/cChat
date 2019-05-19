@@ -20,7 +20,7 @@ import threading
 packet_header_length=20
 packet_limit=100
 payload_limit=packet_limit-packet_header_length
-debug=1
+debug=0
 
 class Packet:
     packet_version = 0
@@ -237,8 +237,8 @@ class RouteUpdateMessage (PacketCollection):
             self.routes=route_data
             routedata=bytearray()
             for route in self.routes:
-                routedata.append(route[0])
-                routedata.append(route[1].to_bytes(2, byteorder='big'))
+                routedata.extend(route[0])
+                routedata.extend(route[1].to_bytes(2, byteorder='big'))
             super().__init__((0x03 if isFull else 0x01),source,destination,session_id,bytes(routedata))
 
         else:
@@ -256,6 +256,8 @@ class SendIdentityMessage (PacketCollection):
     nickname=""
 
     def __init__(self, source, destination, session_id, nickname_data):
+
+        #print("SendIdentityMessage: source:"+print_hex(source)+" destination:"+print_hex(destination)+" nickname data:"+print_hex(nickname_data))
 
         if (type(nickname_data) is str):
             self.nickname=nickname_data
@@ -341,6 +343,8 @@ class PacketManager:
         try:
             packet_collection=PacketCollection.init_with_packets(packet_list).get_collection()
             is_complete=True
+            del open_sessions[packet.session_id]
+
         except Exception as error:
             print(error)
             is_complete=False
@@ -364,13 +368,11 @@ class PacketManager:
             elif type(packet_collection)==RequestFullRouteUpdateMessage:
                 print("RequestFullRouteUpdateMessage received from: "+print_hex(packet_collection.source))             
                 #dest hop  
-                print("blah")
                 message=RouteUpdateMessage(True, self.longid,\
                     packet_collection.source,\
                     self.get_send_session_id(packet_collection.source),\
                     self.routing_manager.get_routing_table())
                 self.routing_manager.send(message.get_packets(),packet_collection.source)
-                print("blah")
                 print("RouteUpdateMessage sent to: "+print_hex(packet_collection.source)+" data:"+print_hex(message.data))  
             elif type(packet_collection)==SendIdentityMessage:
                 print("SendIdentityMessage received from: "+print_hex(packet_collection.source)+\
@@ -389,6 +391,8 @@ class PacketManager:
         session_id=None
         if destination in self.send_sessions:
             session_id=self.send_sessions[destination]+1
+            if session_id==256:
+                session_id=0
         else:
             session_id=0
         self.send_sessions[destination] = session_id
@@ -760,12 +764,13 @@ class SendAndReceive:
                         #add to routing manager for processing
                         routing_manager.add(packet)
                 except Exception as error:
-                    if debug==1:
-                        print("Error recv:",error)
-                        if (debug==1 and str(error)=="can only concatenate str (not \"list\") to str"):
-                            raise error
-                        elif (debug==1 and str(error)=="list index out of range"):
-                            raise error
+                    print("Error recv:",error)
+                    if (debug==1 and str(error)=="can only concatenate str (not \"list\") to str"):
+                        raise error
+                    elif (debug==1 and str(error)=="list index out of range"):
+                        raise error
+                    elif (debug==1 and str(error)=="an integer is required"):
+                        raise error
 
             for s in write:
                 while (len(self.send_buffer)>0):
@@ -793,8 +798,8 @@ class SendAndReceive:
                             print("No route to:"+print_hex(packet.destination))
                         #print("Sent bytes:",sent,"to",neighbour)
                     except Exception as error:
-                        if debug==1:
-                            print("Error send:",error)
+                        print("Error send:",error)
+
             for s in err:
                 print("Error with a socket")
                 s.close()
