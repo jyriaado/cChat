@@ -489,6 +489,7 @@ class Path(object):
             n = n.pre_node
         forwared_to = next_node[len(next_node) - 2]
         return forward_to
+  
 
 class RoutingManager:
     
@@ -602,7 +603,15 @@ class RoutingManager:
             if (row['DESTINATIONID'] == nodeid and row['NEXTHOPID'] == self.id) \
                     or (row['DESTINATIONID'] == self.id and row['NEXTHOPID'] == nodeid):
                 self.routingTable.remove(row)
-        
+
+    def get_routing_table(self):
+        return_table=list()
+        for n in self.routingTable:
+            destination=n['DESTINATIONID']
+            hopcount=n['HOPCOUNT']
+            return_table.append((destination,hopcount))
+        return return_table
+
 class Keyboard(threading.Thread):
 
     send_receive=None
