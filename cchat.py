@@ -210,7 +210,7 @@ class PacketCollection:
         #if (self.packet_type==0x05):
         #    return GroupMessage(self.source, self.destination, self.session_id, self.data)
         if (self.packet_type==0x06):
-            return UserMessage(self.source, self.destination, self.session_id, self.data)
+            return ScreenMessage(self.source, self.destination, self.session_id, self.data)
         if (self.packet_type==0x07):
             return BinaryMessage(self.source, self.destination, self.session_id, self.data)
 
@@ -272,7 +272,7 @@ class SendIdentityMessage (PacketCollection):
             raise Exception("nickname_data must be type string or bytes()")
 
 
-class UserMessage (PacketCollection):
+class ScreenMessage (PacketCollection):
     message=""
 
     def __init__(self, source, destination, session_id, message_data):
