@@ -8,8 +8,6 @@ GPG: 80078218B43B0E90
 
 Send keepalive to the server with this ID as DSTID, it will respond ACK.
 
-
-
 """
 
 import sys
@@ -103,8 +101,8 @@ class PacketCollection:
     #requestFullRoutingTable
     #reponseFullRoutingTable
     #sendIdentity
-    #screenMessage
-    #screenMessageEcho
+    #groupMessage
+    #userMessage
     #binaryMessage
     def __init__(self, packet_type, source, destination, session_id, data):
         self.session_id=session_id
@@ -209,10 +207,13 @@ class PacketCollection:
             return RouteUpdateMessage(True, self.source, self.destination, self.session_id, self.data)
         if (self.packet_type==0x04):
             return SendIdentityMessage(self.source, self.destination, self.session_id, self.data)
+        #if (self.packet_type==0x05):
+        #    return GroupMessage(self.source, self.destination, self.session_id, self.data)
         if (self.packet_type==0x06):
-            return ScreenMessage(self.source, self.destination, self.session_id, self.data)
+            return UserMessage(self.source, self.destination, self.session_id, self.data)
         if (self.packet_type==0x07):
             return BinaryMessage(self.source, self.destination, self.session_id, self.data)
+
 
 class KeepaliveMessage (PacketCollection):
 
@@ -236,8 +237,8 @@ class RouteUpdateMessage (PacketCollection):
             self.routes=route_data
             routedata=bytearray()
             for route in self.routes:
-                routedata.extend(route[0])
-                routedata.extend(route[1].to_bytes(2, byteorder='big'))
+                routedata.append(route[0])
+                routedata.append(route[1].to_bytes(2, byteorder='big'))
             super().__init__((0x03 if isFull else 0x01),source,destination,session_id,bytes(routedata))
 
         else:
@@ -271,7 +272,7 @@ class SendIdentityMessage (PacketCollection):
             raise Exception("nickname_data must be type string or bytes()")
 
 
-class ScreenMessage (PacketCollection):
+class UserMessage (PacketCollection):
     message=""
 
     def __init__(self, source, destination, session_id, message_data):
@@ -297,8 +298,6 @@ class BinaryMessage (PacketCollection):
 
 
 class PacketManager:
-    keepalive_interval=10
-    keepalive_stop=False
     routing_manager=None
     #destination openSessions
     receive_sessions={}
@@ -306,6 +305,8 @@ class PacketManager:
     send_sessions={}
     nickname="default"
     longid=bytes()
+    keepalive_stop=False
+    keepalive_interval=10
 
     def __init__(self,routing_manager,longid,nickname):
         self.routing_manager=routing_manager 
@@ -317,6 +318,7 @@ class PacketManager:
         #thread.join()
     
     def add(self, packet):
+
         #session_id packetlist
         open_sessions={}
         if packet.destination in self.receive_sessions:
@@ -364,7 +366,7 @@ class PacketManager:
                 message=RouteUpdateMessage(True, self.longid,\
                     packet_collection.source,\
                     self.get_send_session_id(packet_collection.source),\
-                    routing_manager.get_routing_table())
+                    self.routing_manager.get_routing_table())
                 self.routing_manager.send(message.get_packets(),packet_collection.source)
                 print("RouteUpdateMessage sent to: "+print_hex(packet_collection.source)+" data:"+print_hex(message.data))  
             elif type(packet_collection)==SendIdentityMessage:
@@ -384,8 +386,6 @@ class PacketManager:
         session_id=None
         if destination in self.send_sessions:
             session_id=self.send_sessions[destination]+1
-            if session_id==256:
-                session_id=0
         else:
             session_id=0
         self.send_sessions[destination] = session_id
@@ -496,7 +496,7 @@ class RoutingManager:
         self.send_receive = send_receive
         self.id = longid #pgp_id
         self.routingTable = []
-        self.neighbors = [] #{'DESTINATIONID': id, 'Weight': cost , 'HOST_PORT': host_port}
+        self.neighbors = []
         self.routingTable.append({'DESTINATIONID': self.id, 'NEXTHOPID': self.id, 'HOPCOUNT': 0})
 
     def set_packet_manager(self, packet_manager):
@@ -505,8 +505,8 @@ class RoutingManager:
     def add(self, packet):
         #do something with packet
         #print("parsing:",packet)
-        nodeid = packet.destination
-        hops = 1
+        nodeid=packet.destination
+        hops=1
         #self.neighbors.append({'DESTINATIONID': nodeid, 'Weight': hops})
         if nodeid not in [r['DESTINATIONID'] for r in self.routingTable]:
             self.routingTable.append({'DESTINATIONID': nodeid, 'NEXTHOPID': nodeid, 'HOPCOUNT': 1})
@@ -521,6 +521,7 @@ class RoutingManager:
             destinationlist = [n['DESTINATIONID'] for n in self.routingTable]
             nextlist = [n['NEXTHOPID'] for n in self.routingTable]
             nodes = list(dict.fromkeys(destinationlist + nextlist))
+            listofNodes = []
             for i in nodes:
                 x = Node(i)
                 listofNodes.append(x)
@@ -530,14 +531,14 @@ class RoutingManager:
                     if row['DESTINATIONID'] == i.node:
                         for j in listofNodes:
                             if row['NEXTHOPID'] == j.node:
-                                y = Edge(row['HOPCOUNT'], i , j )
+                                y = Edge(row['HOPCOUNT'], i, j)
                                 listofEdges.append(y)
             p = Path()
             p.path(listofNodes, listofEdges, listofNodes[0])
             for i in listofNodes:
                 if i.node == nodeid:
-                    targetNode= i
-            nextHopNodeId=p.getpath(targetNode)
+                    targetNode = i
+            nextHopNodeId = p.getpath(targetNode)
             port = get_neighbour_for_destination(nextHopNodeId)
             #find next hop for packet.destination
             #find the host_port for next hop
@@ -562,14 +563,6 @@ class RoutingManager:
             if row['DESTINATIONID'] not in [r['DESTINATIONID'] for r in routingTableReceived]:
                 if row['NEXTHOPID'] == packet.id:
                     self.routingTable.remove(row)
-
-    def get_routing_table(self):
-        return_table=list()
-        for n in self.routingTable:
-            destination=n['DESTINATIONID']
-            hopcount=n['HOPCOUNT']
-            return_table.append((destination,hopcount))
-        return return_table
 
     def add_neighbour(self,host_port, longid):
         self.neighbors.append({'DESTINATIONID': longid, 'Weight': 1, 'HOST_PORT': host_port})
@@ -685,7 +678,6 @@ class SendAndReceive:
     def exit(self):
         print ("Exiting, please wait up to ",str(self.packet_manager.keepalive_interval)+"s")
         self.do_exit=True
-        packet_manager.keepalive_stop=True
 
     def start(self):
 
@@ -697,7 +689,6 @@ class SendAndReceive:
             time.sleep(.1)
             #check for keyboard input
             while (len(self.kbd_buffer)>0):
-
                 kbd_input = self.kbd_buffer.pop(0)
                 self.packet_manager.send_text(kbd_input)
                 #print("Keyboard input:",kbd_input)
@@ -790,7 +781,6 @@ class SendAndReceive:
                     except Exception as error:
                         if debug==1:
                             print("Error send:",error)
-
             for s in err:
                 print("Error with a socket")
                 s.close()
