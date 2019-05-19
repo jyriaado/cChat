@@ -20,7 +20,7 @@ import threading
 packet_header_length=20
 packet_limit=100
 payload_limit=packet_limit-packet_header_length
-debug=0
+debug=1
 
 class Packet:
     packet_version = 0
@@ -351,7 +351,8 @@ class PacketManager:
         if is_complete==True:
             #print("Session complete")
             if type(packet_collection)==KeepaliveMessage:
-                print("KeepaliveMessage received from: "+print_hex(packet_collection.source))
+                if debug==1:
+                    print("KeepaliveMessage received from: "+print_hex(packet_collection.source))
                 #self.routing_manager.send(KeepaliveMessage(None,\
                 #    packet_collection.source,\
                 #    self.get_send_session_id(packet_collection.source)))
@@ -363,11 +364,13 @@ class PacketManager:
             elif type(packet_collection)==RequestFullRouteUpdateMessage:
                 print("RequestFullRouteUpdateMessage received from: "+print_hex(packet_collection.source))             
                 #dest hop  
+                print("blah")
                 message=RouteUpdateMessage(True, self.longid,\
                     packet_collection.source,\
                     self.get_send_session_id(packet_collection.source),\
                     self.routing_manager.get_routing_table())
                 self.routing_manager.send(message.get_packets(),packet_collection.source)
+                print("blah")
                 print("RouteUpdateMessage sent to: "+print_hex(packet_collection.source)+" data:"+print_hex(message.data))  
             elif type(packet_collection)==SendIdentityMessage:
                 print("SendIdentityMessage received from: "+print_hex(packet_collection.source)+\
@@ -444,7 +447,8 @@ class PacketManager:
                 print("thread_function_send_keepalive destinations:",list_destinations)
             for destination in list_destinations:
                 self.routing_manager.send(KeepaliveMessage(None, destination, self.get_send_session_id(destination)).get_packets(),destination)
-                print("KeepaliveMessage sent to: "+print_hex(destination))
+                if debug==1:
+                    print("KeepaliveMessage sent to: "+print_hex(destination))
             time.sleep(self.keepalive_interval) 
 
 class Node(object):
@@ -678,6 +682,7 @@ class SendAndReceive:
     def exit(self):
         print ("Exiting, please wait up to ",str(self.packet_manager.keepalive_interval)+"s")
         self.do_exit=True
+        self.packet_manager.keepalive_stop=True
 
     def start(self):
 
