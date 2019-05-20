@@ -309,6 +309,7 @@ class PacketManager:
     longid=bytes()
     keepalive_stop=False
     keepalive_interval=10
+    destlist=[('Destination','Nickname')]
 
     def __init__(self,routing_manager,longid,nickname):
         self.routing_manager=routing_manager 
@@ -377,6 +378,9 @@ class PacketManager:
             elif type(packet_collection)==SendIdentityMessage:
                 print("SendIdentityMessage received from: "+print_hex(packet_collection.source)+\
                     " nickname:"+packet_collection.nickname)
+                self.destlist.append((print_hex(packet_collection.source), packet_collection.nickname))
+                if debug==1:
+                    print("Source and Nickname added to /list")
             elif type(packet_collection)==ScreenMessage:
                 print("ScreenMessage received from: "+print_hex(packet_collection.source)+\
                     " message: "+packet_collection.message)
@@ -387,6 +391,10 @@ class PacketManager:
             if debug==1:
                 print("Session not complete")
 
+    def print_destlist(self):
+        for row in self.destlist:
+            print("{: >20} {: >20}".format(*row))
+    
     def get_send_session_id(self, destination):
         session_id=None
         if destination in self.send_sessions:
@@ -404,7 +412,9 @@ class PacketManager:
         #text=input('Enter text: ')
         #nickname=input('Enter receiver nickname: ')
         
-        if text[0] == "/":
+        if text == "/list":
+                self.print_destlist()
+        elif text[0] == "/":
             #check if nick available, (example: /bob Hey bob!)
             #separator is first space
             slashnick=text.split(" ", 1)
@@ -620,6 +630,7 @@ class Keyboard(threading.Thread):
 
     send_receive=None
     stop_keyboard=False
+    packet_manager=None
 
     def __init__(self,send_receive):
         threading.Thread.__init__(self)
