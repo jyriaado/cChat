@@ -638,6 +638,19 @@ class RoutingManager:
             return_table.append((destination,hopcount))
         return return_table
 
+    def compare_tables(self, table):
+        newtable = []
+        for row in self.routingTable:
+            newtable.append(
+                {'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': row['NEXTHOPID']+1, 'HOPCOUNT': row['HOPCOUNT']})
+        for row in table:
+            row['NEXTHOPID'] = row['NEXTHOPID'] + 1
+        for row in table:
+            if row not in newtable:
+                newtable.append({'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': row['NEXTHOPID']+1, 'HOPCOUNT': row['HOPCOUNT']})
+        return newtable
+
+
 class Keyboard(threading.Thread):
 
     send_receive=None
