@@ -377,6 +377,7 @@ class PacketManager:
             elif type(packet_collection)==SendIdentityMessage:
                 print("SendIdentityMessage received from: "+print_hex(packet_collection.source)+\
                     " nickname:"+packet_collection.nickname)
+
             elif type(packet_collection)==ScreenMessage:
                 print("ScreenMessage received from: "+print_hex(packet_collection.source)+\
                     " message: "+packet_collection.message)
@@ -574,12 +575,24 @@ class RoutingManager:
                     self.routingTable.remove(row)
 
     def add_neighbour(self,host_port, longid):
+
+        if longid not in [r['DESTINATIONID'] for r in self.routingTable]:
+            self.routingTable.append({'DESTINATIONID': longid, 'NEXTHOPID': self.id, 'HOPCOUNT': 1})
+        else:
+            for my_row in self.routingTable:
+                if my_row['DESTINATIONID'] == longid:
+                    my_row['HOPCOUNT'] = 1
+                    my_row['NEXTHOPID'] = self.id
+        
         self.neighbors.append({'DESTINATIONID': longid, 'Weight': 1, 'HOST_PORT': host_port})
         self.packet_manager.request_routing_update(longid) 
         self.packet_manager.request_send_identity(longid)
 
     def get_all_destinations(self):
-        return [n['DESTINATIONID'] for n in self.neighbors]
+        destinations=[n['DESTINATIONID'] for n in self.routingTable if n['DESTINATIONID']!=self.id]
+        for destination in destinations:
+            print("Destination:"+print_hex(destination))
+        return destinations
 
     def get_neighbour_for_destination(self, destination):
         neighbours=[n['HOST_PORT'] for n in self.neighbors if n['DESTINATIONID']==destination]
