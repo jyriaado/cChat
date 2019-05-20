@@ -593,7 +593,7 @@ class RoutingManager:
         for destination in destinations:
             print("Destination:"+print_hex(destination))
         return destinations
-
+        
     def get_neighbour_for_destination(self, destination):
         neighbours=[n['HOST_PORT'] for n in self.neighbors if n['DESTINATIONID']==destination]
 
