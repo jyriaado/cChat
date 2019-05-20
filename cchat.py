@@ -509,7 +509,7 @@ class Path(object):
         while n is not None:
             next_node.append(n.node)
             n = n.pre_node
-        forwared_to = next_node[len(next_node) - 2]
+        forward_to = next_node[len(next_node) - 2]
         return forward_to
   
 
@@ -566,7 +566,7 @@ class RoutingManager:
                 if i.node == nodeid:
                     targetNode = i
             nextHopNodeId = p.getpath(targetNode)
-            port = get_neighbour_for_destination(nextHopNodeId)
+            port = self.get_neighbour_for_destination(nextHopNodeId)
             #find next hop for packet.destination
             #find the host_port for next hop
             host_port : packet.destination in self.neighbors
