@@ -670,7 +670,7 @@ class RoutingManager:
                         newtable.append(row)
                     else:
                         newtable.append(row2)
-                        temptable.remove(row2)
+                    temptable.remove(row2)
             if temp is False and row['DESTINATIONID'] != self.id:
                 newtable.append(row)
         for row in temptable:
