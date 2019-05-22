@@ -649,16 +649,9 @@ class RoutingManager:
     def compare_tables(self, table):
         newtable = []
         for row in self.routingTable:
-<<<<<<< HEAD
-            newtable.append(
-                {'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': row['NEXTHOPID'], 'HOPCOUNT': row['HOPCOUNT']+1})
-        for row in table:
-            row['HOPCOUNT'] = row['HOPCOUNT'] + 1
-=======
             if row['DESTINATIONID'] == self.id:
                 newtable.append(
                     {'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': row['NEXTHOPID'], 'HOPCOUNT': row['HOPCOUNT']})
->>>>>>> yazeed
         for row in table:
             row['HOPCOUNT'] = row['HOPCOUNT'] + 1
         temptable = table
@@ -677,13 +670,8 @@ class RoutingManager:
                 newtable.append(row)
         for row in temptable:
             if row not in newtable:
-<<<<<<< HEAD
-                newtable.append({'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': row['NEXTHOPID'], 'HOPCOUNT': row['HOPCOUNT']+1})
-        self.routingTable=newtable
-=======
                 newtable.append(row)
         self.routingTable = newtable
->>>>>>> yazeed
 
 
 class Keyboard(threading.Thread):
