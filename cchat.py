@@ -659,13 +659,14 @@ class RoutingManager:
             if row['DESTINATIONID'] == self.id:
                 newtable.append(
                     {'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': row['NEXTHOPID'], 'HOPCOUNT': row['HOPCOUNT']})
+                break
         for row in table:
             row['HOPCOUNT'] = row['HOPCOUNT'] + 1
         temptable = table
         for row in self.routingTable:
             temp = False
             for row2 in table:
-                if row['DESTINATIONID'] == row2['DESTINATIONID']:
+                if row['DESTINATIONID'] == row2['DESTINATIONID'] and row['DESTINATIONID'] != self.id:
                     temp = True
                     if row['HOPCOUNT'] < row2['HOPCOUNT']:
                         newtable.append(row)
