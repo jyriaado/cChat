@@ -662,7 +662,6 @@ class RoutingManager:
                     temp = True
                     if row['HOPCOUNT'] < row2['HOPCOUNT']:
                         newtable.append(row)
-                        print("if exists", newtable)
                     else:
                         newtable.append(row2)
                         temptable.remove(row2)
