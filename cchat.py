@@ -641,14 +641,29 @@ class RoutingManager:
     def compare_tables(self, table):
         newtable = []
         for row in self.routingTable:
-            newtable.append(
-                {'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': row['NEXTHOPID']+1, 'HOPCOUNT': row['HOPCOUNT']})
+            if row['DESTINATIONID'] == self.id:
+                newtable.append(
+                    {'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': row['NEXTHOPID'], 'HOPCOUNT': row['HOPCOUNT']})
         for row in table:
-            row['NEXTHOPID'] = row['NEXTHOPID'] + 1
-        for row in table:
+            row['HOPCOUNT'] = row['HOPCOUNT'] + 1
+        temptable = table
+        for row in self.routingTable:
+            temp = False
+            for row2 in table:
+                if row['DESTINATIONID'] == row2['DESTINATIONID'] and row['NEXTHOPID'] == row2['NEXTHOPID']:
+                    temp = True
+                    if row['HOPCOUNT'] < row2['HOPCOUNT']:
+                        newtable.append(row)
+                        print("if exists", newtable)
+                    else:
+                        newtable.append(row2)
+                        temptable.remove(row2)
+            if temp is False and row['DESTINATIONID'] != 'mynode':
+                newtable.append(row)
+        for row in temptable:
             if row not in newtable:
-                newtable.append({'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': row['NEXTHOPID']+1, 'HOPCOUNT': row['HOPCOUNT']})
-        return newtable
+                newtable.append(row)
+        self.routingTable = newtable
 
 
 class Keyboard(threading.Thread):
