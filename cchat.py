@@ -309,7 +309,7 @@ class PacketManager:
     longid=bytes()
     keepalive_stop=False
     keepalive_interval=10
-    destlist=[('Destination','Nickname')]
+    destlist=[]
 
     def __init__(self,routing_manager,longid,nickname):
         self.routing_manager=routing_manager 
@@ -378,7 +378,7 @@ class PacketManager:
             elif type(packet_collection)==SendIdentityMessage:
                 print("SendIdentityMessage received from: "+print_hex(packet_collection.source)+\
                     " nickname:"+packet_collection.nickname)
-                self.destlist.append((print_hex(packet_collection.source), packet_collection.nickname))
+                self.destlist.append((packet_collection.source, packet_collection.nickname))
                 if debug==1:
                     print("Source and Nickname added to /list")
             elif type(packet_collection)==ScreenMessage:
@@ -396,17 +396,15 @@ class PacketManager:
         list_destinations=self.routing_manager.get_all_destinations()
         for pair in self.destlist:
             match = False
-            if pair[0] == 'Destination':
-                match = True
-            else:
-                for destination in list_destinations:
-                    if pair[0] == print_hex(destination):
-                        match = True
+            for destination in list_destinations:
+                if pair[0] == destination:
+                    match = True
             if match == False:
                 self.destlist.remove(pair)
         #print the list
         for row in self.destlist:
-            print("{: >20} {: >20}".format(*row))
+            print(print_hex(row[0]),row[1])
+            #print("{: >20} {: >20}".format(*row))
     
     def get_send_session_id(self, destination):
         session_id=None
