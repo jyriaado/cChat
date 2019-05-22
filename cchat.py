@@ -436,7 +436,6 @@ class PacketManager:
                 print("ScreenMessage sent to: "+givenNick+" destination: "+print_hex(destination)+" text: "+text[(len(givenNick)+2):])
                 #send
                 routing_manager.send(m.get_packets(), destination)
-            
         else:
             #send text to all destinations
             for destination in self.routing_manager.get_all_destinations():
@@ -670,6 +669,7 @@ class RoutingManager:
         for row in temptable:
             if row not in newtable:
                 newtable.append(row)
+        print(newtable)
         self.routingTable = newtable
 
 
