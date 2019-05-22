@@ -406,34 +406,34 @@ class PacketManager:
         self.send_sessions[destination] = session_id
         return session_id
 
-    # hello
-    # /nick hello
-    def send_text(self, text):
-        #text=input('Enter text: ')
-        #nickname=input('Enter receiver nickname: ')
-        
+    def send_text(self, text):        
         if text == "/list":
                 self.print_destlist()
         elif text[0] == "/":
-            #check if nick available, (example: /bob Hey bob!)
-            #separator is first space
-            slashnick=text.split(" ", 1)
-            nick=slashnick[0][1:]
+            #separator for nickname is first space
+            givenNick=(text.split(" ", 1))[0][1:]
+            dest=None
             availableNick=False
-            if availableNick == True:
-                try:
-                    #check if nickname exists (destination <> nickname connection)
-                    #if yes, availableNick = True
-                    test=1
-                except ValueError:
-                    print("This nickname is not available!") #print list of available nicknames?
-        else:
-            #send text to all destinations///group message?
-            for destination in self.routing_manager.get_all_destinations():
+            #check if nickname is available in destlist
+            for pair in self.destlist:
+                testNick = pair[1]
+                if testNick == givenNick:
+                    availableNick = True
+                    dest = pair[0] #TYPE ISSUE!
+            if availableNick == False:
+                print(givenNick + " is not available! Use /list for available nicknames")
+            else:
                 #compose packet
                 m=ScreenMessage(self.longid, destination, self.get_send_session_id(destination), text)
-                print("ScreenMessage sent to: "+print_hex(destination)+" text:"+text)
+                print("ScreenMessage sent to: "+givenNick+" destination: "+print_hex(destination)+" text: "+text[(len(givenNick)+2):])
                 #send
+                routing_manager.send(m.get_packets(), destination)
+            
+        else:
+            #send text to all destinations
+            for destination in self.routing_manager.get_all_destinations():
+                m=ScreenMessage(self.longid, destination, self.get_send_session_id(destination), text)
+                print("ScreenMessage sent to: "+print_hex(destination)+" text:"+text)
                 routing_manager.send(m.get_packets(), destination)
 
         
