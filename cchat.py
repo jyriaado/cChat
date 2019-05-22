@@ -369,12 +369,13 @@ class PacketManager:
                 print("RouteUpdateMessage received from: " + print_hex(packet_collection.source) + \
                       " data:" + print_hex(packet_collection.data))
                 # make the table compatible and compare to our version
-                no_routes = len(packet_collection.data) % 10
+                no_routes = len(packet_collection.data) // 10
                 routing_table = []
                 for i in range(no_routes):
-                    routing_table.append({"DESTINATION": packet_collection.data[i * 10:i * 10 + 8], \
+                    routing_table.append({"DESTINATIONID": packet_collection.data[i * 10:i * 10 + 8], \
                                           "NEXTHOPID": packet_collection.source, \
-                                          "HOPCOUNT": int.from_bytes(packet_collection.data[i * 10 + 8:i * 10 + 10])})
+                                          "HOPCOUNT": int.from_bytes(packet_collection.data[i * 10 + 8:i * 10 + 10],\
+                                              byteorder='big')})
                 self.routing_manager.compare_tables(routing_table)
             elif type(packet_collection) == RequestFullRouteUpdateMessage:
                 print("RequestFullRouteUpdateMessage received from: " + print_hex(packet_collection.source))
