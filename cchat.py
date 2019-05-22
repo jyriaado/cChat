@@ -392,6 +392,19 @@ class PacketManager:
                 print("Session not complete")
 
     def print_destlist(self):
+        #check if destination list in routing manager has been updated.
+        list_destinations=self.routing_manager.get_all_destinations()
+        for pair in self.destlist:
+            match = False
+            if pair[0] == 'Destination':
+                match = True
+            else:
+                for destination in list_destinations:
+                    if pair[0] == print_hex(destination):
+                        match = True
+            if match == False:
+                self.destlist.remove(pair)
+        #print the list
         for row in self.destlist:
             print("{: >20} {: >20}".format(*row))
     
@@ -409,17 +422,17 @@ class PacketManager:
     def send_text(self, text):        
         if text == "/list":
                 self.print_destlist()
-        elif text[0] == "/":
+        elif text[0] == "/" and text not in ('/help','/debugon','/debugoff','/exit'):
             #separator for nickname is first space
             givenNick=(text.split(" ", 1))[0][1:]
-            dest=None
+            destination=None
             availableNick=False
             #check if nickname is available in destlist
             for pair in self.destlist:
                 testNick = pair[1]
                 if testNick == givenNick:
                     availableNick = True
-                    dest = pair[0] #TYPE ISSUE!
+                    destination = pair[0] #TYPE ISSUE!
             if availableNick == False:
                 print(givenNick + " is not available! Use /list for available nicknames")
             else:
@@ -599,8 +612,7 @@ class RoutingManager:
 
     def get_all_destinations(self):
         destinations=[n['DESTINATIONID'] for n in self.routingTable if n['DESTINATIONID']!=self.id]
-        for destination in destinations:
-            print("Destination:"+print_hex(destination))
+        #for destination in destinations: print("Destination:"+print_hex(destination))
         return destinations
         
     def get_neighbour_for_destination(self, destination):
@@ -673,6 +685,7 @@ class Keyboard(threading.Thread):
                 debug=0
                 #print("debug:",debug)
             if (kbd_input == "/exit"):
+                
                 break
             if (kbd_input == "/help"):
                 print ("/exit - exits the messaging client")
@@ -693,7 +706,7 @@ class SendAndReceive:
 
     #ack interval is 5 seconds
     resend_interval=5000 
-    keepalive_max_interval=40000
+    keepalive_max_interval=5000
     host_port=("localhost", 5000)
     long_id=bytes().fromhex("0101010102020202")
     nickname="joe"
@@ -760,7 +773,7 @@ class SendAndReceive:
                         " diff:"+str(timestamp - resend_info[1]))
                 self.routing_manager.send(resend_info[0],resend_info[0].destination)
             
-            #drop connection, if keepalive is not acked in resend_max_interval
+            #drop connection, if keepalive is not acked in keepalive_max_interval
             drop_destinations=[destination \
                 for destination in self.keepalive_buffer \
                 if (timestamp - self.keepalive_buffer[destination]) > self.keepalive_max_interval]
