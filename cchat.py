@@ -431,16 +431,16 @@ class PacketManager:
                 testNick = pair[1]
                 if testNick == givenNick:
                     availableNick = True
-                    dest = pair[0]  # TYPE ISSUE!
+                    dest = pair[0] 
             if availableNick == False:
                 print(givenNick + " is not available! Use /list for available nicknames")
             else:
                 # compose packet
-                m = ScreenMessage(self.longid, destination, self.get_send_session_id(destination), text)
+                m = ScreenMessage(self.longid, dest, self.get_send_session_id(dest), text)
                 print("ScreenMessage sent to: " + givenNick + " destination: " + print_hex(
-                    destination) + " text: " + text[(len(givenNick) + 2):])
+                    dest) + " text: " + text[(len(givenNick) + 2):])
                 # send
-                routing_manager.send(m.get_packets(), destination)
+                routing_manager.send(m.get_packets(), dest)
         else:
             # send text to all destinations
             for destination in self.routing_manager.get_all_destinations():
@@ -535,6 +535,30 @@ class RoutingManager:
     def set_packet_manager(self, packet_manager):
         self.packet_manager = packet_manager
 
+    def bellman_ford_next_hop(self, destination):
+        destinationlist = [n['DESTINATIONID'] for n in self.routingTable]
+        nextlist = [n['NEXTHOPID'] for n in self.routingTable]
+        nodes = list(dict.fromkeys(destinationlist + nextlist))
+        listofNodes = []
+        for i in nodes:
+            x = Node(i)
+            listofNodes.append(x)
+        listofEdges = []
+        for row in self.routingTable:
+            for i in listofNodes:
+                if row['DESTINATIONID'] == i.node:
+                    for j in listofNodes:
+                        if row['NEXTHOPID'] == j.node:
+                            y = Edge(row['HOPCOUNT'], i, j)
+                            listofEdges.append(y)
+        p = Path()
+        p.path(listofNodes, listofEdges, listofNodes[0])
+        for i in listofNodes:
+            if i.node == destination:
+                targetNode = i
+        nextHopNodeId = p.getpath(targetNode)
+        return nextHopNodeId
+
     def add(self, packet):
         # do something with packet
         # print("parsing:",packet)
@@ -551,32 +575,9 @@ class RoutingManager:
         if packet.destination == self.id:
             self.packet_manager.add(packet)
         else:
-            destinationlist = [n['DESTINATIONID'] for n in self.routingTable]
-            nextlist = [n['NEXTHOPID'] for n in self.routingTable]
-            nodes = list(dict.fromkeys(destinationlist + nextlist))
-            listofNodes = []
-            for i in nodes:
-                x = Node(i)
-                listofNodes.append(x)
-            listofEdges = []
-            for row in self.routingTable:
-                for i in listofNodes:
-                    if row['DESTINATIONID'] == i.node:
-                        for j in listofNodes:
-                            if row['NEXTHOPID'] == j.node:
-                                y = Edge(row['HOPCOUNT'], i, j)
-                                listofEdges.append(y)
-            p = Path()
-            p.path(listofNodes, listofEdges, listofNodes[0])
-            for i in listofNodes:
-                if i.node == nodeid:
-                    targetNode = i
-            nextHopNodeId = p.getpath(targetNode)
-            port = self.get_neighbour_for_destination(nextHopNodeId)
-            # find next hop for packet.destination
-            # find the host_port for next hop
-            host_port: packet.destination in self.neighbors
-            self.send_receive.send(packet, port)
+            destination = self.bellman_ford_next_hop(packet.destination)
+            self.send(packet,destination)
+
 
     def updateRoutingTable(self, packet):
 
@@ -613,9 +614,12 @@ class RoutingManager:
         self.packet_manager.request_send_identity(longid)
 
     def get_all_destinations(self):
-        destinations = [n['DESTINATIONID'] for n in self.routingTable if n['DESTINATIONID'] != self.id]
+        destinations = set()
+        [destinations.add(n['DESTINATIONID']) for n in self.routingTable if n['DESTINATIONID'] != self.id]
         for destination in destinations:
             print("Destination:" + print_hex(destination))
+        print("destinations",destinations)
+        print("routingTable",self.routingTable)
         return destinations
 
     def get_neighbour_for_destination(self, destination):
@@ -634,7 +638,13 @@ class RoutingManager:
 
     def send(self, packet, destination):
         # print("sending packet:"+str(packet)+" to destination:"+print_hex(destination))
-        self.send_receive.send(packet, self.get_neighbour_for_destination(destination))
+        if destination in self.get_neighbour_destinations():
+            self.send_receive.send(packet, self.get_neighbour_for_destination(destination))
+        else:
+            print("routingTable:",self.routingTable)
+            new_destination = self.bellman_ford_next_hop(destination)
+            print("bellman_ford "+print_hex(destination)+"-->"+print_hex(new_destination))
+            self.send_receive.send(packet,self.get_neighbour_for_destination(new_destination))
 
     def remove_neighbour(self, nodeid):
         for row in self.neighbors:
