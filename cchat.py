@@ -16,6 +16,7 @@ import select
 import time
 import json
 import threading
+import traceback
 
 packet_header_length = 20
 packet_limit = 100
@@ -376,17 +377,19 @@ class PacketManager:
                                           "NEXTHOPID": packet_collection.source, \
                                           "HOPCOUNT": int.from_bytes(packet_collection.data[i * 10 + 8:i * 10 + 10],\
                                               byteorder='big')})
-                self.routing_manager.compare_tables(routing_table)
+                if len(routing_table)>0:
+                    #compare routing tables
+                    self.routing_manager.compare_tables(routing_table)
+                else:
+                    #if route update message is empty, remove all routes via source
+                    self.routing_manager.remove_node(packet_collection.source)
+
             elif type(packet_collection) == RequestFullRouteUpdateMessage:
                 print("RequestFullRouteUpdateMessage received from: " + print_hex(packet_collection.source))
                 # dest hop
-                message = RouteUpdateMessage(True, self.longid, \
-                                             packet_collection.source, \
-                                             self.get_send_session_id(packet_collection.source), \
-                                             self.routing_manager.get_routing_table())
-                self.routing_manager.send(message.get_packets(), packet_collection.source)
-                print("RouteUpdateMessage sent to: " + print_hex(packet_collection.source) + " data:" + print_hex(
-                    message.data))
+                self.request_send_routing_update(True, \
+                    packet_collection.source, \
+                        self.routing_manager.get_routing_table())
             elif type(packet_collection) == SendIdentityMessage:
                 print("SendIdentityMessage received from: " + print_hex(packet_collection.source) + \
                       " nickname:" + packet_collection.nickname)
@@ -448,7 +451,16 @@ class PacketManager:
                 print("ScreenMessage sent to: " + print_hex(destination) + " text:" + text)
                 routing_manager.send(m.get_packets(), destination)
 
-    def request_routing_update(self, destination):
+    def request_send_routing_update(self, isFull, destination, routes):
+        message = RouteUpdateMessage(isFull, self.longid, \
+                                destination, \
+                                self.get_send_session_id(destination), \
+                                routes)
+        self.routing_manager.send(message.get_packets(), destination)
+        print("RouteUpdateMessage sent to: " + print_hex(destination) + " data:" + print_hex(
+            message.data))
+
+    def request_send_fullrouting_update(self, destination):
         self.routing_manager.send( \
             RequestFullRouteUpdateMessage( \
                 self.longid, \
@@ -508,7 +520,7 @@ class Path(object):
                 distance2 = u.distance + x.weight
                 if distance2 < v.distance:
                     v.distance = distance2
-                    v.preNode = u
+                    v.pre_node = u
 
     def getpath(self, target):
         n = target
@@ -523,6 +535,8 @@ class Path(object):
 class RoutingManager:
     send_receive = None
     packet_manager = None
+    forwarding_table = {}
+    distance_table={}
 
     def __init__(self, send_receive, longid):
 
@@ -531,11 +545,14 @@ class RoutingManager:
         self.routingTable = []
         self.neighbors = []
         self.routingTable.append({'DESTINATIONID': self.id, 'NEXTHOPID': self.id, 'HOPCOUNT': 0})
+        #generate new forwarding table after route update
+        self.bellman_ford()
 
     def set_packet_manager(self, packet_manager):
         self.packet_manager = packet_manager
 
-    def bellman_ford_next_hop(self, destination):
+    #generate forwarding and distance table
+    def bellman_ford(self):
         destinationlist = [n['DESTINATIONID'] for n in self.routingTable]
         nextlist = [n['NEXTHOPID'] for n in self.routingTable]
         nodes = list(dict.fromkeys(destinationlist + nextlist))
@@ -551,13 +568,16 @@ class RoutingManager:
                         if row['NEXTHOPID'] == j.node:
                             y = Edge(row['HOPCOUNT'], i, j)
                             listofEdges.append(y)
+                            y = Edge(row['HOPCOUNT'], j, i)
+                            listofEdges.append(y)
+
         p = Path()
         p.path(listofNodes, listofEdges, listofNodes[0])
         for i in listofNodes:
-            if i.node == destination:
-                targetNode = i
-        nextHopNodeId = p.getpath(targetNode)
-        return nextHopNodeId
+            self.forwarding_table[i.node] = p.getpath(i)
+            self.distance_table[i.node] = i.distance
+            #print("node:",i.node," next:",self.forwarding_table[i.node]," distance:",self.distance_table[i.node])
+
 
     def add(self, packet):
         # do something with packet
@@ -565,39 +585,19 @@ class RoutingManager:
         nodeid = packet.destination
         hops = 1
         # self.neighbors.append({'DESTINATIONID': nodeid, 'Weight': hops})
-        if nodeid not in [r['DESTINATIONID'] for r in self.routingTable]:
-            self.routingTable.append({'DESTINATIONID': nodeid, 'NEXTHOPID': nodeid, 'HOPCOUNT': 1})
-        else:
-            for my_row in self.routingTable:
-                if my_row['DESTINATIONID'] == nodeid:
-                    my_row['HOPCOUNT'] = 1
-                    my_row['NEXTHOPID'] = nodeid
+        #if nodeid not in [r['DESTINATIONID'] for r in self.routingTable]:
+        #    self.routingTable.append({'DESTINATIONID': nodeid, 'NEXTHOPID': nodeid, 'HOPCOUNT': 1})
+        #else:
+        #    for my_row in self.routingTable:
+        #        if my_row['DESTINATIONID'] == nodeid:
+        #            my_row['HOPCOUNT'] = 1
+        #            my_row['NEXTHOPID'] = nodeid
         if packet.destination == self.id:
             self.packet_manager.add(packet)
         else:
-            destination = self.bellman_ford_next_hop(packet.destination)
+            destination = self.forwarding_table[packet.destination]
             self.send(packet,destination)
 
-
-    def updateRoutingTable(self, packet):
-
-        routingTableReceived = json.loads(packet.data)
-        for row in routingTableReceived:
-            if row['DESTINATIONID'] not in [r['DESTINATIONID'] for r in self.routingTable]:
-                if row['NEXTHOPID'] != self.id:
-                    self.routingTable.append(
-                        {'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': packet.id,
-                         'HOPCOUNT': row['HOPCOUNT'] + 1})
-            else:
-                for my_row in self.routingTable:
-                    if my_row['DESTINATIONID'] == row['DESTINATIONID']:
-                        if row['HOPCOUNT'] + 1 < my_row['HOPCOUNT']:
-                            my_row['HOPCOUNT'] = row['HOPCOUNT'] + 1
-                            my_row['NEXTHOPID'] = packet.id
-        for row in self.routingTable:
-            if row['DESTINATIONID'] not in [r['DESTINATIONID'] for r in routingTableReceived]:
-                if row['NEXTHOPID'] == packet.id:
-                    self.routingTable.remove(row)
 
     def add_neighbour(self, host_port, longid):
 
@@ -608,9 +608,11 @@ class RoutingManager:
                 if my_row['DESTINATIONID'] == longid:
                     my_row['HOPCOUNT'] = 1
                     my_row['NEXTHOPID'] = self.id
+        #generate new forwarding table after route update
+        self.bellman_ford()
 
         self.neighbors.append({'DESTINATIONID': longid, 'Weight': 1, 'HOST_PORT': host_port})
-        self.packet_manager.request_routing_update(longid)
+        self.packet_manager.request_send_fullrouting_update(longid)
         self.packet_manager.request_send_identity(longid)
 
     def get_all_destinations(self):
@@ -618,8 +620,8 @@ class RoutingManager:
         [destinations.add(n['DESTINATIONID']) for n in self.routingTable if n['DESTINATIONID'] != self.id]
         for destination in destinations:
             print("Destination:" + print_hex(destination))
-        print("destinations",destinations)
-        print("routingTable",self.routingTable)
+        #print("destinations",destinations)
+        #print("routingTable",self.routingTable)
         return destinations
 
     def get_neighbour_for_destination(self, destination):
@@ -641,25 +643,29 @@ class RoutingManager:
         if destination in self.get_neighbour_destinations():
             self.send_receive.send(packet, self.get_neighbour_for_destination(destination))
         else:
-            print("routingTable:",self.routingTable)
-            new_destination = self.bellman_ford_next_hop(destination)
-            print("bellman_ford "+print_hex(destination)+"-->"+print_hex(new_destination))
+            #print("routingTable:",self.routingTable)
+            #print("forwardingTable:",self.forwarding_table)
+            #print("distanceTable:",self.distance_table)
+            new_destination = self.forwarding_table[destination]
+            distance = self.distance_table[destination]
+            print("forwarding:"+print_hex(destination)+"-->"+print_hex(new_destination)+"("+str(distance)+")")
             self.send_receive.send(packet,self.get_neighbour_for_destination(new_destination))
 
-    def remove_neighbour(self, nodeid):
+    def remove_node(self, nodeid):
         for row in self.neighbors:
             if row['DESTINATIONID'] == nodeid:
                 self.neighbors.remove(row)
         for row in self.routingTable:
-            if (row['DESTINATIONID'] == nodeid and row['NEXTHOPID'] == self.id) \
-                    or (row['DESTINATIONID'] == self.id and row['NEXTHOPID'] == nodeid):
+            if (row['DESTINATIONID'] == nodeid or row['NEXTHOPID'] == nodeid):
                 self.routingTable.remove(row)
+        #generate new forwarding table after route update
+        self.bellman_ford()
 
     def get_routing_table(self):
         return_table = list()
-        for n in self.routingTable:
-            destination = n['DESTINATIONID']
-            hopcount = n['HOPCOUNT']
+        #print("distance table:",self.distance_table)
+        for destination in self.distance_table:
+            hopcount = self.distance_table[destination]
             return_table.append((destination, hopcount))
         return return_table
 
@@ -670,8 +676,8 @@ class RoutingManager:
                 newtable.append(
                     {'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': row['NEXTHOPID'], 'HOPCOUNT': row['HOPCOUNT']})
                 break
-        for row in table:
-            row['HOPCOUNT'] = row['HOPCOUNT'] + 1
+        #for row in table:
+        #    row['HOPCOUNT'] = row['HOPCOUNT'] + 1
         temptable = table
         for row in self.routingTable:
             temp = False
@@ -685,11 +691,18 @@ class RoutingManager:
                     temptable.remove(row2)
             if temp is False and row['DESTINATIONID'] != self.id:
                 newtable.append(row)
+        newentries=[]
         for row in temptable:
             if row not in newtable:
                 newtable.append(row)
+                newentries.append(row)
         self.routingTable = newtable
-
+        #generate new forwarding table after route update
+        self.bellman_ford()
+        #for new entries, ask also host identity
+        for row in newentries:
+            if (row['DESTINATIONID']!=self.id):
+                self.packet_manager.request_send_identity(row['DESTINATIONID'])
 
 class Keyboard(threading.Thread):
     send_receive = None
@@ -769,6 +782,12 @@ class SendAndReceive:
         self.kbd_buffer.append(kbd_input)
 
     def exit(self):
+        #announce exit to neighbours
+        for destination in routing_manager.get_neighbour_destinations():
+            self.packet_manager.request_send_routing_update(True, \
+                    destination, \
+                        list())
+    
         print("Exiting, please wait up to ", str(self.packet_manager.keepalive_interval) + "s")
         self.do_exit = True
         self.packet_manager.keepalive_stop = True
@@ -841,12 +860,8 @@ class SendAndReceive:
                         routing_manager.add(packet)
                 except Exception as error:
                     print("Error recv:", error)
-                    if (debug == 1 and str(error) == "can only concatenate str (not \"list\") to str"):
-                        raise error
-                    elif (debug == 1 and str(error) == "list index out of range"):
-                        raise error
-                    elif (debug == 1 and str(error) == "an integer is required"):
-                        raise error
+                    if debug==1:
+                        traceback.print_exc()
 
             for s in write:
                 while (len(self.send_buffer) > 0):
