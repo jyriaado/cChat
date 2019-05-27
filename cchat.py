@@ -502,25 +502,31 @@ class PacketManager:
                     print("KeepaliveMessage sent to: " + print_hex(destination))
             time.sleep(self.keepalive_interval)
 
-
+# class Node,
+# Each node in the network will be initialized and added to a list of nodes
+# Later it will be used to find the best forwarding table
 class Node(object):
 
-    def __init__(self, node):
-        self.node = node
-        # self.node_id = id(self)
+    def __init__(self, node): # Node class constructor
+        self.node = node # node name(id)
         self.list = []
-        self.pre_node = None
-        self.distance = sys.maxsize
+        self.pre_node = None # if the node is connected to a previous node
+        self.distance = sys.maxsize # distance is set to max according to Bellman-Ford algorithm
 
 
+# Class Edge,
+# Each node is connected to at least one other node,
+# class edge connect these nodes together and put them in a list
+# it will be used in Bellman-ford to find the path
 class Edge(object):
 
     def __init__(self, weight, start, end):
-        self.weight = weight
-        self.start = start
-        self.end = end
+        self.weight = weight # hop-count weight
+        self.start = start # starting node
+        self.end = end # destination node
 
-
+# Class Path,
+# this class connect and find the path to all nodes
 class Path(object):
     def path(self, node_list, edge_list, start):
         start.distance = 0
@@ -533,6 +539,7 @@ class Path(object):
                     v.distance = distance2
                     v.pre_node = u
 
+    # This is the Bellman-Ford function that the program can send the destination and it returns the forwarding table
     def getpath(self, target):
         n = target
         next_node = []
@@ -542,7 +549,8 @@ class Path(object):
         forward_to = next_node[len(next_node) - 2]
         return forward_to
 
-
+# Class Routing Manager,
+# This class manages the routing table, neighbors tables
 class RoutingManager:
     send_receive = None
     packet_manager = None
@@ -552,10 +560,10 @@ class RoutingManager:
     def __init__(self, send_receive, longid):
 
         self.send_receive = send_receive
-        self.id = longid  # pgp_id
-        self.routingTable = []
-        self.neighbors = []
-        self.routingTable.append({'DESTINATIONID': self.id, 'NEXTHOPID': self.id, 'HOPCOUNT': 0})
+        self.id = longid  # pgp_id of my node
+        self.routingTable = [] # initializing routingTable
+        self.neighbors = [] # initializing neighbors table
+        self.routingTable.append({'DESTINATIONID': self.id, 'NEXTHOPID': self.id, 'HOPCOUNT': 0}) # adding my node to the routing table with hop count 0
         #generate new forwarding table after route update
         self.bellman_ford()
 
@@ -592,6 +600,7 @@ class RoutingManager:
             self.distance_table[i.node] = i.distance
             #print("node:",i.node," next:",self.forwarding_table[i.node]," distance:",self.distance_table[i.node])
 
+    # The add function, for incoming packets
     def add(self, packet):
         # do something with packet
         # print("parsing:",packet)        
@@ -605,6 +614,7 @@ class RoutingManager:
             else:
                 print("No route to host:"+print_hex(packet.destination))
 
+    # add_neighbour, adds neighbour to the niegbours table and update the routing table
     def add_neighbour(self, host_port, longid):
 
         print("Add neighbour:",print_hex(longid))
@@ -628,11 +638,13 @@ class RoutingManager:
                 self.packet_manager.request_send_routing_update(False, \
                     destination, [(longid,1)])
 
+    # get_all_destinations, returns all destinations in routing table
     def get_all_destinations(self):
         destinations = set()
         [destinations.add(n['DESTINATIONID']) for n in self.routingTable if n['DESTINATIONID'] != self.id]
         return destinations
 
+    # get_neighbour_for_destination, returns a neighbours connected to a destination from neighbours table
     def get_neighbour_for_destination(self, destination):
         neighbours = [n['HOST_PORT'] for n in self.neighbors if n['DESTINATIONID'] == destination]
 
@@ -641,6 +653,7 @@ class RoutingManager:
         else:
             return None
 
+    # get_neighbour_destinations, returns all neighbours destinations from niegbours table
     def get_neighbour_destinations(self):
         destinations = []
         for row in self.neighbors:
@@ -660,6 +673,7 @@ class RoutingManager:
             else:
                 self.send_receive.send(packet,None)
 
+    # remove_node, remove node from neighbors table (if exists) and routing table and all its connected routing table
     def remove_node(self, nodeid):
         print("removing node:",nodeid)
         new_neighbours=[]
@@ -680,6 +694,7 @@ class RoutingManager:
                 self.packet_manager.request_send_routing_update(False, \
                     destination, [(nodeid,0xFFFF)])
 
+    # get_routing_table, returns destinations and hop count for all routingtable and put them in a set
     def get_routing_table(self):
         return_table = list()
         for destination in self.distance_table:
@@ -687,6 +702,9 @@ class RoutingManager:
             return_table.append((destination, hopcount))
         return return_table
 
+    # compare_tables, this method is used to compare 2 routing tables, our node current routing table, 
+    # and the table (or update records) received from a new node
+    # it updates the routing table to get the optimized route 
     def compare_tables(self, table):
         updates= [] #updates for other neighbours
         newtable = []
