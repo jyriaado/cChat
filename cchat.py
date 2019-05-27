@@ -17,12 +17,12 @@ import time
 import json
 import threading
 import traceback
+import random
 
 packet_header_length = 20
 packet_limit = 100
 payload_limit = packet_limit - packet_header_length
 debug = 0
-
 
 class Packet:
     packet_version = 0
@@ -303,23 +303,23 @@ class BinaryMessage(PacketCollection):
 
 
 class PacketManager:
-    routing_manager = None
-    # destination openSessions
-    receive_sessions = {}
-    # destination session_id
-    send_sessions = {}
-    nickname = "default"
-    longid = bytes()
-    keepalive_stop = False
-    keepalive_interval = 10
-    destlist = [('Destination', 'Nickname')]
+    routing_manager=None
+    #destination openSessions
+    receive_sessions={}
+    #destination session_id
+    send_sessions={}
+    nickname="default"
+    longid=bytes()
+    keepalive_stop=False
+    keepalive_interval=10
+    destlist=set()
 
-    def __init__(self, routing_manager, longid, nickname):
-        self.routing_manager = routing_manager
-        self.nickname = nickname
-        self.longid = longid
-        # start keepalive thread
-        thread = threading.Thread(target=self.thread_function_send_keepalive)
+    def __init__(self,routing_manager,longid,nickname):
+        self.routing_manager=routing_manager 
+        self.nickname=nickname
+        self.longid=longid
+        #start keepalive thread
+        thread = threading.Thread(target=self.thread_function_send_keepalive)   
         thread.start()
         # thread.join()
 
@@ -393,7 +393,7 @@ class PacketManager:
             elif type(packet_collection) == SendIdentityMessage:
                 print("SendIdentityMessage received from: " + print_hex(packet_collection.source) + \
                       " nickname:" + packet_collection.nickname)
-                self.destlist.append((print_hex(packet_collection.source), packet_collection.nickname))
+                self.destlist.add((packet_collection.source, packet_collection.nickname))
                 if debug == 1:
                     print("Source and Nickname added to /list")
             elif type(packet_collection) == ScreenMessage:
@@ -407,9 +407,20 @@ class PacketManager:
                 print("Session not complete")
 
     def print_destlist(self):
+        #check if destination list in routing manager has been updated.
+        list_destinations=self.routing_manager.get_all_destinations()
+        newlist=set()
+        for pair in self.destlist:
+            for destination in list_destinations:
+                if pair[0] == destination:
+                    newlist.add(pair)
+        self.destlist=newlist
+        #print the list
+        print("Destination Nickname")
         for row in self.destlist:
-            print("{: >20} {: >20}".format(*row))
-
+            print(print_hex(row[0]),row[1])
+            #print("{: >20} {: >20}".format(*row))
+    
     def get_send_session_id(self, destination):
         session_id = None
         if destination in self.send_sessions:
@@ -423,27 +434,27 @@ class PacketManager:
 
     def send_text(self, text):
         if text == "/list":
-            self.print_destlist()
-        elif text[0] == "/":
-            # separator for nickname is first space
-            givenNick = (text.split(" ", 1))[0][1:]
-            dest = None
-            availableNick = False
-            # check if nickname is available in destlist
+                self.print_destlist()
+        elif text[0] == "/" and text not in ('/help','/debugon','/debugoff','/exit'):
+            #separator for nickname is first space
+            givenNick=(text.split(" ", 1))[0][1:]
+            destination=None
+            availableNick=False
+            #check if nickname is available in destlist
             for pair in self.destlist:
                 testNick = pair[1]
                 if testNick == givenNick:
                     availableNick = True
-                    dest = pair[0] 
+                    destination = pair[0] 
             if availableNick == False:
                 print(givenNick + " is not available! Use /list for available nicknames")
             else:
                 # compose packet
-                m = ScreenMessage(self.longid, dest, self.get_send_session_id(dest), text)
+                m = ScreenMessage(self.longid, destination, self.get_send_session_id(destination), text)
                 print("ScreenMessage sent to: " + givenNick + " destination: " + print_hex(
-                    dest) + " text: " + text[(len(givenNick) + 2):])
+                    destination) + " text: " + text[(len(givenNick) + 2):])
                 # send
-                routing_manager.send(m.get_packets(), dest)
+                routing_manager.send(m.get_packets(), destination)
         else:
             # send text to all destinations
             for destination in self.routing_manager.get_all_destinations():
@@ -553,6 +564,7 @@ class RoutingManager:
 
     #generate forwarding and distance table
     def bellman_ford(self):
+        #print("routingTable:",self.routingTable)
         destinationlist = [n['DESTINATIONID'] for n in self.routingTable]
         nextlist = [n['NEXTHOPID'] for n in self.routingTable]
         nodes = list(dict.fromkeys(destinationlist + nextlist))
@@ -573,34 +585,29 @@ class RoutingManager:
 
         p = Path()
         p.path(listofNodes, listofEdges, listofNodes[0])
+        self.forwarding_table={}
+        self.distance_table={}
         for i in listofNodes:
             self.forwarding_table[i.node] = p.getpath(i)
             self.distance_table[i.node] = i.distance
             #print("node:",i.node," next:",self.forwarding_table[i.node]," distance:",self.distance_table[i.node])
 
-
     def add(self, packet):
         # do something with packet
-        # print("parsing:",packet)
-        nodeid = packet.destination
-        hops = 1
-        # self.neighbors.append({'DESTINATIONID': nodeid, 'Weight': hops})
-        #if nodeid not in [r['DESTINATIONID'] for r in self.routingTable]:
-        #    self.routingTable.append({'DESTINATIONID': nodeid, 'NEXTHOPID': nodeid, 'HOPCOUNT': 1})
-        #else:
-        #    for my_row in self.routingTable:
-        #        if my_row['DESTINATIONID'] == nodeid:
-        #            my_row['HOPCOUNT'] = 1
-        #            my_row['NEXTHOPID'] = nodeid
+        # print("parsing:",packet)        
         if packet.destination == self.id:
             self.packet_manager.add(packet)
         else:
-            destination = self.forwarding_table[packet.destination]
-            self.send(packet,destination)
-
+            if packet.destination in self.forwarding_table:
+                destination = self.forwarding_table[packet.destination]
+                print("Forwarding:",print_hex(packet.destination),"-->",print_hex(destination))
+                self.send(packet,destination)
+            else:
+                print("No route to host:"+print_hex(packet.destination))
 
     def add_neighbour(self, host_port, longid):
 
+        print("Add neighbour:",print_hex(longid))
         if longid not in [r['DESTINATIONID'] for r in self.routingTable]:
             self.routingTable.append({'DESTINATIONID': longid, 'NEXTHOPID': self.id, 'HOPCOUNT': 1})
         else:
@@ -614,14 +621,16 @@ class RoutingManager:
         self.neighbors.append({'DESTINATIONID': longid, 'Weight': 1, 'HOST_PORT': host_port})
         self.packet_manager.request_send_fullrouting_update(longid)
         self.packet_manager.request_send_identity(longid)
+        
+        #send update to neighbours also regarding addition
+        for destination in self.get_neighbour_destinations():
+            if destination!=longid:
+                self.packet_manager.request_send_routing_update(False, \
+                    destination, [(longid,1)])
 
     def get_all_destinations(self):
         destinations = set()
         [destinations.add(n['DESTINATIONID']) for n in self.routingTable if n['DESTINATIONID'] != self.id]
-        for destination in destinations:
-            print("Destination:" + print_hex(destination))
-        #print("destinations",destinations)
-        #print("routingTable",self.routingTable)
         return destinations
 
     def get_neighbour_for_destination(self, destination):
@@ -643,66 +652,91 @@ class RoutingManager:
         if destination in self.get_neighbour_destinations():
             self.send_receive.send(packet, self.get_neighbour_for_destination(destination))
         else:
-            #print("routingTable:",self.routingTable)
-            #print("forwardingTable:",self.forwarding_table)
-            #print("distanceTable:",self.distance_table)
-            new_destination = self.forwarding_table[destination]
-            distance = self.distance_table[destination]
-            print("forwarding:"+print_hex(destination)+"-->"+print_hex(new_destination)+"("+str(distance)+")")
-            self.send_receive.send(packet,self.get_neighbour_for_destination(new_destination))
+            if destination in self.forwarding_table:
+                new_destination = self.forwarding_table[destination]
+                distance = self.distance_table[destination]
+                print("forwarding:"+print_hex(destination)+"-->"+print_hex(new_destination)+"("+str(distance)+")")
+                self.send_receive.send(packet,self.get_neighbour_for_destination(new_destination))
+            else:
+                self.send_receive.send(packet,None)
 
     def remove_node(self, nodeid):
+        print("removing node:",nodeid)
+        new_neighbours=[]
         for row in self.neighbors:
-            if row['DESTINATIONID'] == nodeid:
-                self.neighbors.remove(row)
+            if row['DESTINATIONID'] != nodeid:
+                new_neighbours.append(row)
+        self.neighbors=new_neighbours
+        new_routingTable=[]
         for row in self.routingTable:
-            if (row['DESTINATIONID'] == nodeid or row['NEXTHOPID'] == nodeid):
-                self.routingTable.remove(row)
+            if (row['DESTINATIONID'] != nodeid and row['NEXTHOPID'] != nodeid):
+                new_routingTable.append(row)
+        self.routingTable=new_routingTable
         #generate new forwarding table after route update
         self.bellman_ford()
+        #send also update to neighbours regarding removal
+        for destination in self.get_neighbour_destinations():
+            if destination!=nodeid:
+                self.packet_manager.request_send_routing_update(False, \
+                    destination, [(nodeid,0xFFFF)])
 
     def get_routing_table(self):
         return_table = list()
-        #print("distance table:",self.distance_table)
         for destination in self.distance_table:
             hopcount = self.distance_table[destination]
             return_table.append((destination, hopcount))
         return return_table
 
     def compare_tables(self, table):
+        updates= [] #updates for other neighbours
         newtable = []
         for row in self.routingTable:
             if row['DESTINATIONID'] == self.id:
                 newtable.append(
                     {'DESTINATIONID': row['DESTINATIONID'], 'NEXTHOPID': row['NEXTHOPID'], 'HOPCOUNT': row['HOPCOUNT']})
                 break
-        #for row in table:
-        #    row['HOPCOUNT'] = row['HOPCOUNT'] + 1
         temptable = table
         for row in self.routingTable:
             temp = False
             for row2 in table:
-                if row['DESTINATIONID'] == row2['DESTINATIONID'] and row['DESTINATIONID'] != self.id:
+                if row['DESTINATIONID'] == row2['DESTINATIONID'] \
+                    and row['NEXTHOPID'] == row2['NEXTHOPID']:
                     temp = True
-                    if row['HOPCOUNT'] < row2['HOPCOUNT']:
+                    if row2['HOPCOUNT']==0xFFFF:
+                        updates.append(row2)
+                    elif row['HOPCOUNT'] <= row2['HOPCOUNT']:
                         newtable.append(row)
                     else:
                         newtable.append(row2)
+                        updates.append(row2)
                     temptable.remove(row2)
-            if temp is False and row['DESTINATIONID'] != self.id:
+            if temp is False and row not in newtable:
                 newtable.append(row)
         newentries=[]
         for row in temptable:
-            if row not in newtable:
+            if row not in newtable and row['HOPCOUNT']!=0xFFFF:
                 newtable.append(row)
                 newentries.append(row)
+                updates.append(row)
         self.routingTable = newtable
         #generate new forwarding table after route update
         self.bellman_ford()
         #for new entries, ask also host identity
         for row in newentries:
-            if (row['DESTINATIONID']!=self.id):
+            if row['DESTINATIONID']!=self.id:
                 self.packet_manager.request_send_identity(row['DESTINATIONID'])
+        #send updates to neighbours, about remove/add/update
+        routes=[]
+        for update in updates:
+            destination=update['DESTINATIONID']
+            if (update['HOPCOUNT']==0xFFFF):
+                routes.append((destination,0xFFFF))
+            else:
+                routes.append((destination,self.distance_table[destination]))
+        if len(routes)>0:
+            for destination in self.get_neighbour_destinations():
+                self.packet_manager.request_send_routing_update(False,destination,routes)
+
 
 class Keyboard(threading.Thread):
     send_receive = None
@@ -721,20 +755,44 @@ class Keyboard(threading.Thread):
             if (kbd_input == "/debugon"):
                 debug = 1
                 # print("debug:",debug)
-            if (kbd_input == "/debugoff"):
+            elif (kbd_input == "/debugoff"):
                 debug = 0
                 # print("debug:",debug)
-            if (kbd_input == "/exit"):
+            elif (kbd_input == "/exit"):               
                 break
-            if (kbd_input == "/help"):
+            elif (kbd_input =="/routes"):
+                print("Destination","Nexthop","Hopcount")
+                for route in self.send_receive.routing_manager.routingTable:
+                    print (print_hex(route['DESTINATIONID']),\
+                        print_hex(route['NEXTHOPID']),\
+                        route['HOPCOUNT'])
+            elif (kbd_input =="/forward"):
+                print("Destination","NextHop")
+                for destination in self.send_receive.routing_manager.forwarding_table:
+                    print (print_hex(destination),\
+                        print_hex(self.send_receive.routing_manager.forwarding_table[destination]))
+            elif (kbd_input =="/distance"):
+                print("Destination","Distance")
+                for destination in self.send_receive.routing_manager.distance_table:
+                    print (print_hex(destination),\
+                        str(self.send_receive.routing_manager.distance_table[destination]))
+            elif (kbd_input =="/bf"):
+                self.send_receive.routing_manager.bellman_ford()
+            elif (kbd_input =="/self"):
+                print("self longid:",print_hex(self.send_receive.long_id))
+            elif (kbd_input == "/help"):
                 print("/exit - exits the messaging client")
                 print("/help - this help message")
                 print("/list - list all destinations, with nicknames")
+                print("/routes - list all routes")
+                print("/forward - list forwarding table")
+                print("/distance - list distance table")
+                print("/self - print self longid")
                 print("/debugon - turn debugging on")
                 print("/debugoff - turn debugging off")
                 print("<message> - send message to all destinations")
                 print("/<nick> <message> - send message to <nick, for example /joe Hello!")
-            if (kbd_input != ""):
+            elif (kbd_input != ""):
                 self.send_receive.keyboard(kbd_input)
         self.send_receive.exit()
 
@@ -756,6 +814,7 @@ class SendAndReceive:
     # dictionary destination = timestap
     keepalive_buffer = {}
     do_exit = False
+    neighbours = {}
 
     def __init__(self, host_port, long_id, nickname):
         self.host_port = host_port
@@ -767,8 +826,6 @@ class SendAndReceive:
 
     def set_packet_manager(self, packet_manager):
         self.packet_manager = packet_manager
-
-        # packet is of type Packet
 
     # neighbour is tuple (host port)
     def send(self, packet, neighbour):
@@ -826,13 +883,18 @@ class SendAndReceive:
             for drop_destination in drop_destinations:
                 print("dropping neighbour destination:" + print_hex(drop_destination))
                 del self.keepalive_buffer[drop_destination]
-                self.routing_manager.remove_neighbour(drop_destination)
+                self.routing_manager.remove_node(drop_destination)
                 # remove all packets drom ack buffer for destination
-                # remove_packets = [packet_info \
-                #    for packet_info in self.ack_buffer \
-                #    if packet_info[0] == drop_destination]
-                # for remove_packet in remove_packets:
-                #    del self.ack_buffer[remove_packet]
+                remove_packets = [packet_info \
+                    for packet_info in self.ack_buffer \
+                    if packet_info[0] == drop_destination]
+                for remove_packet in remove_packets:
+                    del self.ack_buffer[remove_packet]
+                # remove also packets for destination in send buffer
+                remove_packets = [packet_info for packet_info in self.send_buffer \
+                    if packet_info[0].destination==drop_destination]
+                for remove_packet in remove_packets:
+                    self.send_buffer.remove(remove_packet)
 
             connections = [sock]
             recv, write, err = select.select(connections, connections, connections)
@@ -854,10 +916,16 @@ class SendAndReceive:
                             if (packet.source, packet.session_id, packet.seq) in self.ack_buffer:
                                 del self.ack_buffer[(packet.source, packet.session_id, packet.seq)]
                     else:
+                        #see if neighbour is back
+                        if (packet.source in self.neighbours and \
+                            self.routing_manager.get_neighbour_for_destination(packet.source))==None:
+                            self.routing_manager.add_neighbour(self.neighbours[packet.source], packet.source)
                         # ack sent packet
                         self.routing_manager.send(packet.get_ack_packet(), packet.source)
                         # add to routing manager for processing
                         routing_manager.add(packet)
+                except ConnectionResetError:
+                    pass
                 except Exception as error:
                     print("Error recv:", error)
                     if debug==1:
@@ -887,12 +955,15 @@ class SendAndReceive:
                             sent = s.sendto(packet.encode(), neighbour)
                         else:
                             print("No route to:" + print_hex(packet.destination))
-                        # print("Sent bytes:",sent,"to",neighbour)
                     except Exception as error:
                         print("Error send:", error)
+                        if debug==1:
+                            traceback.print_exc()
 
             for s in err:
                 print("Error with a socket")
+                if debug==1:
+                        traceback.print_exc()
                 s.close()
                 connections.remove(s)
 
@@ -936,11 +1007,16 @@ if (len(sys.argv) >= 5):
 
             if (len(sys.argv) >= 8 and len(sys.argv) % 3 == 2):
                 for i in range(5, len(sys.argv), 3):
-                    print("adding neighbour host:" + sys.argv[i] + " port:" + sys.argv[i + 1] + " longid:" + sys.argv[
-                        i + 2])
-                    if (len(bytes().fromhex(sys.argv[i + 2])) == 8):
-                        routing_manager.add_neighbour((sys.argv[i], int(sys.argv[i + 1])),
-                                                      bytes().fromhex(sys.argv[i + 2]))
+                    host = sys.argv[i]
+                    port = sys.argv[i + 1]
+                    longid = sys.argv[i + 2]
+                    print("adding neighbour host:" + host + " port:" + port + " longid:" + longid)
+                    ipaddress = socket.gethostbyname_ex(host)
+                    longidbytes = bytes().fromhex(longid)
+                    if (len(longidbytes) == 8):
+                        host_port = (host, int(port))
+                        send_receive.neighbours[longidbytes]=host_port
+                        routing_manager.add_neighbour(host_port,longidbytes)
                     else:
                         print("longid must be 8 bytes:" + sys.argv[i + 2])
 
